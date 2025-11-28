@@ -45,6 +45,37 @@ export default function ManagerPage() {
     }
   };
 
+  const handleManagerCheckIn = async () => {
+    if (!selected || !effectiveSheetId) return;
+    setActionLoading(true);
+    setMessage(null);
+
+    try {
+      const response = await fetch('/api/checkin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sheetId: effectiveSheetId,
+          identifier: selected.序號 || selected.姓名,
+        }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        setMessage('✅ 已由工作人員代為簽到');
+        await refreshSelected(selected.序號 || selected.姓名);
+      } else {
+        setMessage(`❌ 簽到失敗：${data.message || '未知錯誤'}`);
+      }
+    } catch (error) {
+      console.error('Manager check-in error:', error);
+      setMessage('❌ 代為簽到時發生錯誤');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const handleSearch = async () => {
     if (!keyword.trim()) {
       setMessage('請先輸入序號或姓名再搜尋');
@@ -232,34 +263,6 @@ export default function ManagerPage() {
                   </div>
                 </div>
 
-            {staffName.trim() && results.length > 1 && (
-              <div className="space-y-2">
-                <p className="text-xs text-slate-600">找到多筆結果，請選擇其中一筆：</p>
-                <div className="border rounded-md divide-y bg-white">
-                  {results.map((attendee, index) => (
-                    <button
-                      key={`${attendee.序號}-${index}`}
-                      type="button"
-                      className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center justify-between ${
-                        selected &&
-                        selected.序號 === attendee.序號 &&
-                        selected.姓名 === attendee.姓名
-                          ? 'bg-slate-100'
-                          : ''
-                      }`}
-                      onClick={() => setSelected(attendee)}
-                    >
-                      <span>
-                        <span className="font-medium mr-2">{attendee.序號}</span>
-                        <span>{attendee.姓名}</span>
-                      </span>
-                      {getStatusLabel(attendee)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {staffName.trim() && selected && (
               <div className="mt-4 p-4 rounded-md border bg-white space-y-3">
                 <div className="flex items-center justify-between">
@@ -275,6 +278,18 @@ export default function ManagerPage() {
                 </div>
 
                 <div className="flex flex-wrap gap-2 pt-2 border-t mt-2">
+                  {selected.已到 !== 'TRUE' && selected.已到 !== 'CANCELLED' && (
+                    <Button
+                      variant="default"
+                      size="sm"
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                      onClick={handleManagerCheckIn}
+                      disabled={actionLoading}
+                    >
+                      代為簽到
+                    </Button>
+                  )}
+
                   {selected.已到 === 'TRUE' && (
                     <Button
                       variant="outline"
@@ -310,6 +325,34 @@ export default function ManagerPage() {
                       恢復為未簽到
                     </Button>
                   )}
+                </div>
+              </div>
+            )}
+
+            {staffName.trim() && results.length > 1 && (
+              <div className="space-y-2">
+                <p className="text-xs text-slate-600">找到多筆結果，請選擇其中一筆：</p>
+                <div className="border rounded-md divide-y bg-white">
+                  {results.map((attendee, index) => (
+                    <button
+                      key={`${attendee.序號}-${index}`}
+                      type="button"
+                      className={`w-full text左 px-3 py-2 text-sm hover:bg-slate-50 flex items-center justify-between ${
+                        selected &&
+                        selected.序號 === attendee.序號 &&
+                        selected.姓名 === attendee.姓名
+                          ? 'bg-slate-100'
+                          : ''
+                      }`}
+                      onClick={() => setSelected(attendee)}
+                    >
+                      <span>
+                        <span className="font-medium mr-2">{attendee.序號}</span>
+                        <span>{attendee.姓名}</span>
+                      </span>
+                      {getStatusLabel(attendee)}
+                    </button>
+                  ))}
                 </div>
               </div>
             )}

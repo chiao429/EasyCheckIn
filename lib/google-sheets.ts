@@ -192,11 +192,19 @@ export async function searchAttendee(
   query: string
 ): Promise<Attendee[]> {
   const allAttendees = await getAllAttendees(sheetId);
-  const lowerQuery = query.toLowerCase();
+  const trimmed = query.trim();
+  const lowerQuery = trimmed.toLowerCase();
 
-  return allAttendees.filter(
-    (attendee) =>
-      attendee.序號.toLowerCase().includes(lowerQuery) ||
-      attendee.姓名.toLowerCase().includes(lowerQuery)
+  // 1. 先用序號做「精準比對」
+  const exactBySerial = allAttendees.filter(
+    (attendee) => attendee.序號.toLowerCase() === lowerQuery
+  );
+  if (exactBySerial.length > 0) {
+    return exactBySerial;
+  }
+
+  // 2. 若找不到序號，再用姓名做「模糊查詢」
+  return allAttendees.filter((attendee) =>
+    attendee.姓名.toLowerCase().includes(lowerQuery)
   );
 }
