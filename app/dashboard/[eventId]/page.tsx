@@ -26,7 +26,7 @@ export default function DashboardPage() {
   const [listMode, setListMode] = useState<'checked' | 'cancelled' | 'unchecked'>(
     'checked'
   );
-  const [showDetails, setShowDetails] = useState(true);
+  const [showDetails, setShowDetails] = useState(false);
 
   const effectiveSheetId = sheetFromQuery || process.env.GOOGLE_SHEET_ID || eventId;
 
@@ -118,9 +118,18 @@ export default function DashboardPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => setShowDetails((prev) => !prev)}
-                className="border-slate-600 text-slate-200 bg-slate-800 hover:bg-slate-700"
+                className={`border-slate-600 text-xs font-medium rounded-full px-3 py-1.5 transition-all
+                  ${showDetails
+                    ? 'bg-emerald-500 text-slate-900 hover:bg-emerald-400 shadow-md'
+                    : 'bg-slate-800 text-slate-200 hover:bg-slate-700'}`}
               >
-                {showDetails ? '收合名單區塊' : '展開名單區塊'}
+                <span className="mr-2">名單區塊</span>
+                <span
+                  className={`inline-flex items-center w-10 h-5 rounded-full px-0.5 text-[10px] font-semibold transition-all
+                    ${showDetails ? 'bg-emerald-900 text-emerald-300 justify-end' : 'bg-slate-500 text-slate-100 justify-start'}`}
+                >
+                  <span className="w-4 h-4 rounded-full bg-white shadow" />
+                </span>
               </Button>
             </div>
             <p className="text-[11px] text-slate-400">
@@ -136,69 +145,86 @@ export default function DashboardPage() {
         )}
 
         {/* KPI Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card className="cursor-default bg-slate-700 border-slate-600">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-slate-200">應出席人數</CardTitle>
+              <CardTitle className="text-base md:text-lg font-medium text-white">應出席人數</CardTitle>
               <Users className="h-4 w-4 text-slate-300" />
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-bold text-slate-100">{effectiveTotalForRate}</div>
-              <p className="text-xs text-slate-300 mt-1">可以清楚看出應出席的人數（不含不會來）</p>
+              <div className="text-5xl md:text-6xl font-extrabold text-slate-100 text-right leading-tight">
+                {effectiveTotalForRate}
+              </div>
+              <p className="text-xs text-slate-300 mt-1">應出席的人數（不含不會來）</p>
             </CardContent>
           </Card>
 
           <Card
             className={`bg-emerald-600 cursor-pointer transition-all hover:shadow-md ${
-              listMode === 'checked'
-                ? 'ring-4 ring-emerald-400 shadow-lg scale-[1.02] -translate-y-0.5'
+              showDetails && listMode === 'checked'
+                ? 'ring-4 ring-emerald-300 ring-offset-2 ring-offset-slate-900 shadow-xl scale-[1.05] -translate-y-1'
                 : 'shadow-sm'
             }`}
-            onClick={() => setListMode('checked')}
+            onClick={() => {
+              if (!showDetails) return;
+              setListMode('checked');
+            }}
           >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-emerald-100">實到人數</CardTitle>
+              <CardTitle className="text-base md:text-lg font-medium text-white">實到人數</CardTitle>
               <UserCheck className="h-4 w-4 text-emerald-200" />
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-bold text-emerald-100">{checked}</div>
-              <p className="text-xs text-emerald-200 mt-1">可以清楚看出目前實到（已簽到）的人數</p>
+              <div className="text-5xl md:text-6xl font-extrabold text-emerald-100 text-right leading-tight">
+                {checked}
+              </div>
+              <p className="text-xs text-emerald-200 mt-1">目前實到（已簽到）的人數</p>
             </CardContent>
           </Card>
 
           <Card
             className={`bg-red-600 cursor-pointer transition-all hover:shadow-md ${
-              listMode === 'unchecked'
-                ? 'ring-4 ring-red-400 shadow-lg scale-[1.02] -translate-y-0.5'
+              showDetails && listMode === 'unchecked'
+                ? 'ring-4 ring-red-300 ring-offset-2 ring-offset-slate-900 shadow-xl scale-[1.05] -translate-y-1'
                 : 'shadow-sm'
             }`}
-            onClick={() => setListMode('unchecked')}
+            onClick={() => {
+              if (!showDetails) return;
+              setListMode('unchecked');
+            }}
           >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-red-100">尚未簽到人數</CardTitle>
+              <CardTitle className="text-base md:text-lg font-medium text-white">尚未簽到人數</CardTitle>
               <UserX className="h-4 w-4 text-red-200" />
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-bold text-red-100">{unchecked}</div>
-              <p className="text-xs text-red-200 mt-1">可以清楚看出未簽到的人數</p>
+              <div className="text-5xl md:text-6xl font-extrabold text-red-100 text-right leading-tight">
+                {unchecked}
+              </div>
+              <p className="text-xs text-red-200 mt-1">未簽到的人數</p>
             </CardContent>
           </Card>
 
           <Card
             className={`bg-amber-600 cursor-pointer transition-all hover:shadow-md ${
-              listMode === 'cancelled'
-                ? 'ring-4 ring-amber-400 shadow-lg scale-[1.02] -translate-y-0.5'
+              showDetails && listMode === 'cancelled'
+                ? 'ring-4 ring-amber-300 ring-offset-2 ring-offset-slate-900 shadow-xl scale-[1.05] -translate-y-1'
                 : 'shadow-sm'
             }`}
-            onClick={() => setListMode('cancelled')}
+            onClick={() => {
+              if (!showDetails) return;
+              setListMode('cancelled');
+            }}
           >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-amber-100">不會出席人數</CardTitle>
+              <CardTitle className="text-base md:text-lg font-medium text-white">不會出席人數</CardTitle>
               <Ban className="h-4 w-4 text-amber-200" />
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-bold text-amber-100">{cancelled}</div>
-              <p className="text-xs text-amber-200 mt-1">可以清楚看出不會出席的人數</p>
+              <div className="text-5xl md:text-6xl font-extrabold text-amber-100 text-right leading-tight">
+                {cancelled}
+              </div>
+              <p className="text-xs text-amber-200 mt-1">不會出席的人數</p>
             </CardContent>
           </Card>
         </div>
@@ -284,7 +310,7 @@ export default function DashboardPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {/* 出席率 */}
               <div className="flex flex-col items-center justify-center">
-                <div className="w-full max-w-[140px] rounded-2xl bg-slate-800/60 border border-slate-700 p-4 shadow-inner">
+                <div className="w-full max-w-[190px] rounded-2xl bg-slate-800/60 border border-slate-700 p-4 shadow-inner">
                   <div className="relative w-full aspect-square">
                     <div
                       className="absolute inset-0 rounded-full"
@@ -298,7 +324,7 @@ export default function DashboardPage() {
                             : 'conic-gradient(#e5e7eb 0deg 100%)',
                       }}
                     />
-                    <div className="absolute inset-4 rounded-full bg-slate-900 flex flex-col items-center justify-center border border-slate-700">
+                    <div className="absolute inset-5 rounded-full bg-slate-900 flex flex-col items-center justify-center border border-slate-700">
                       <span className="text-[11px] uppercase tracking-wide text-slate-400">出席率</span>
                       <span className="text-xl font-semibold text-white">
                         {rate.toFixed(1)}%
@@ -311,7 +337,7 @@ export default function DashboardPage() {
 
               {/* 尚未簽到率 */}
               <div className="flex flex-col items-center justify-center">
-                <div className="w-full max-w-[140px] rounded-2xl bg-slate-800/60 border border-slate-700 p-4 shadow-inner">
+                <div className="w-full max-w-[190px] rounded-2xl bg-slate-800/60 border border-slate-700 p-4 shadow-inner">
                   <div className="relative w-full aspect-square">
                     {(() => {
                       const safeTotal = effectiveTotalForRate > 0 ? effectiveTotalForRate : 1;
@@ -331,7 +357,7 @@ export default function DashboardPage() {
                         />
                       );
                     })()}
-                    <div className="absolute inset-4 rounded-full bg-slate-900 flex flex-col items-center justify-center border border-slate-700">
+                    <div className="absolute inset-5 rounded-full bg-slate-900 flex flex-col items-center justify-center border border-slate-700">
                       <span className="text-[11px] uppercase tracking-wide text-slate-400">尚未簽到率</span>
                       <span className="text-xl font-semibold text-white">
                         {effectiveTotalForRate > 0
@@ -347,7 +373,7 @@ export default function DashboardPage() {
 
               {/* 不會出席率 */}
               <div className="flex flex-col items-center justify-center">
-                <div className="w-full max-w-[140px] rounded-2xl bg-slate-800/60 border border-slate-700 p-4 shadow-inner">
+                <div className="w-full max-w-[190px] rounded-2xl bg-slate-800/60 border border-slate-700 p-4 shadow-inner">
                   <div className="relative w-full aspect-square">
                     {(() => {
                       const safeTotal = effectiveTotalForRate > 0 ? effectiveTotalForRate : 1;
@@ -367,7 +393,7 @@ export default function DashboardPage() {
                         />
                       );
                     })()}
-                    <div className="absolute inset-4 rounded-full bg-slate-900 flex flex-col items-center justify-center border border-slate-700">
+                    <div className="absolute inset-5 rounded-full bg-slate-900 flex flex-col items-center justify-center border border-slate-700">
                       <span className="text-[11px] uppercase tracking-wide text-slate-400">不會出席率</span>
                       <span className="text-xl font-semibold text-white">
                         {effectiveTotalForRate > 0
