@@ -23,10 +23,17 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [listMode, setListMode] = useState<'checked' | 'cancelled' | 'unchecked'>(
+  // 初始值固定為 'checked'，避免伺服器與瀏覽器第一次 render 不一致
+  const [listMode, setListMode] = useState<'all' | 'checked' | 'cancelled' | 'unchecked'>(
     'checked'
   );
+  // 初始值固定為 false，實際狀態會在掛載後透過 useEffect 從 localStorage 還原
   const [showDetails, setShowDetails] = useState(false);
+  // 控制是否已完成 client 端還原，避免先看到預設 UI 再跳到還原狀態
+  const [hydrated, setHydrated] = useState(false);
+  // 名單區塊模糊查詢關鍵字（依姓名）
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
 
   const effectiveSheetId = sheetFromQuery || process.env.GOOGLE_SHEET_ID || eventId;
 
@@ -64,10 +71,69 @@ export default function DashboardPage() {
     }
   };
 
+  // 掛載後從 localStorage 還原 listMode 與 showDetails
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      // 還原 listMode
+      const listKey = `dashboard_list_mode_${eventId}`;
+      const storedMode = window.localStorage.getItem(listKey) as
+        | 'all'
+        | 'checked'
+        | 'cancelled'
+        | 'unchecked'
+        | null;
+      if (storedMode === 'all' || storedMode === 'checked' || storedMode === 'cancelled' || storedMode === 'unchecked') {
+        setListMode(storedMode);
+      }
+
+      // 還原 showDetails
+      const detailsKey = `dashboard_show_details_${eventId}`;
+      const storedDetails = window.localStorage.getItem(detailsKey);
+      if (storedDetails === 'true') {
+        setShowDetails(true);
+      } else if (storedDetails === 'false') {
+        setShowDetails(false);
+      }
+    } catch {
+      // 讀取失敗時保持預設值
+    }
+
+    // 標記已完成還原，可以安全顯示 UI
+    setHydrated(true);
+  }, [eventId]);
+
+  // 根據網址中的 sheetId 重新載入資料
   useEffect(() => {
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveSheetId]);
+
+  // 將名單區塊展開 / 收合狀態存到瀏覽器
+  useEffect(() => {
+    if (!hydrated) return; // 還沒還原前不要覆蓋 localStorage
+    try {
+      if (typeof window !== 'undefined') {
+        const storageKey = `dashboard_show_details_${eventId}`;
+        window.localStorage.setItem(storageKey, showDetails ? 'true' : 'false');
+      }
+    } catch (e) {
+      // 忽略 localStorage 寫入失敗
+    }
+  }, [showDetails, eventId, hydrated]);
+
+  // 將目前選擇的名單模式 (listMode) 存到瀏覽器，讓下次載入時沿用
+  useEffect(() => {
+    if (!hydrated) return; // 還沒還原前不要覆蓋 localStorage
+    try {
+      if (typeof window !== 'undefined') {
+        const storageKey = `dashboard_list_mode_${eventId}`;
+        window.localStorage.setItem(storageKey, listMode);
+      }
+    } catch (e) {
+      // 忽略 localStorage 寫入失敗
+    }
+  }, [listMode, eventId, hydrated]);
 
   const total = attendees.length;
   const checked = attendees.filter((a) => a.已到 === 'TRUE').length;
@@ -82,6 +148,8 @@ export default function DashboardPage() {
 
   const getDetailList = () => {
     switch (listMode) {
+      case 'all':
+        return attendees;
       case 'checked':
         return checkedList;
       case 'cancelled':
@@ -92,7 +160,30 @@ export default function DashboardPage() {
     }
   };
 
-  const detailList = getDetailList();
+  const PAGE_SIZE = 5;
+  const rawDetailList = getDetailList();
+
+  // 依搜尋關鍵字過濾名單（目前僅針對姓名做包含查詢）
+  const detailList =
+    searchQuery.trim().length === 0
+      ? rawDetailList
+      : rawDetailList.filter((a) =>
+          a.姓名.toLowerCase().includes(searchQuery.trim().toLowerCase())
+        );
+  const totalPages = Math.max(1, Math.ceil(detailList.length / PAGE_SIZE));
+  const safePage = Math.min(currentPage, totalPages);
+  const startIndex = (safePage - 1) * PAGE_SIZE;
+  const pagedList = detailList.slice(startIndex, startIndex + PAGE_SIZE);
+
+  const handleChangeListMode = (mode: 'all' | 'checked' | 'cancelled' | 'unchecked') => {
+    setListMode(mode);
+    setCurrentPage(1);
+  };
+
+  // 在還沒完成 client 還原之前，不渲染內容，避免看到預設狀態閃一下
+  if (!hydrated) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 p-4 md:p-8">
@@ -146,7 +237,17 @@ export default function DashboardPage() {
 
         {/* KPI Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card className="cursor-default bg-slate-700 border-slate-600">
+          <Card
+            className={`bg-slate-700 border-slate-600 transition-all cursor-pointer hover:shadow-md ${
+              showDetails && listMode === 'all'
+                ? 'ring-4 ring-slate-200 ring-offset-2 ring-offset-slate-900 shadow-xl scale-[1.05] -translate-y-1'
+                : 'shadow-sm'
+            }`}
+            onClick={() => {
+              if (!showDetails) return;
+              handleChangeListMode('all');
+            }}
+          >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-base md:text-lg font-medium text-white">應出席人數</CardTitle>
               <Users className="h-4 w-4 text-slate-300" />
@@ -167,7 +268,7 @@ export default function DashboardPage() {
             }`}
             onClick={() => {
               if (!showDetails) return;
-              setListMode('checked');
+              handleChangeListMode('checked');
             }}
           >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -190,7 +291,7 @@ export default function DashboardPage() {
             }`}
             onClick={() => {
               if (!showDetails) return;
-              setListMode('unchecked');
+              handleChangeListMode('unchecked');
             }}
           >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -213,7 +314,7 @@ export default function DashboardPage() {
             }`}
             onClick={() => {
               if (!showDetails) return;
-              setListMode('cancelled');
+              handleChangeListMode('cancelled');
             }}
           >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -232,7 +333,7 @@ export default function DashboardPage() {
         {/* 名單區塊：依上方 panel 切換顯示 */}
         {showDetails && (
           <Card
-            className={`cursor-default transition-shadow hover:shadow-md 
+            className={`cursor-default transition-shadow hover:shadow-md bg-slate-900/80 border border-slate-700
               ${listMode === 'checked' && 'border-emerald-700 bg-emerald-950/60'}
               ${listMode === 'unchecked' && 'border-red-700 bg-red-950/60'}
               ${listMode === 'cancelled' && 'border-amber-700 bg-amber-950/60'}`}
@@ -240,24 +341,56 @@ export default function DashboardPage() {
             <CardHeader>
               <CardTitle
                 className={`text-base md:text-lg font-semibold 
+                  ${listMode === 'all' && 'text-slate-100'}
                   ${listMode === 'checked' && 'text-emerald-200'}
                   ${listMode === 'unchecked' && 'text-red-200'}
                   ${listMode === 'cancelled' && 'text-amber-200'}`}
               >
+                {listMode === 'all' && '全部名單'}
                 {listMode === 'checked' && '已簽到名單'}
                 {listMode === 'unchecked' && '尚未簽到名單'}
                 {listMode === 'cancelled' && '不會出席名單'}
               </CardTitle>
+              <div className="mt-2 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                <div className="flex w-full md:w-auto items-center gap-2">
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    placeholder="輸入姓名關鍵字進行搜尋"
+                    className="w-full md:w-72 rounded-md border border-slate-600 bg-slate-900 px-3 py-1.5 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery('');
+                      setCurrentPage(1);
+                    }}
+                    disabled={searchQuery.trim().length === 0}
+                    className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-colors
+                      ${searchQuery.trim().length === 0
+                        ? 'border-slate-700 text-slate-500 bg-slate-800 cursor-not-allowed'
+                        : 'border-slate-500 text-slate-100 bg-slate-800 hover:bg-slate-700'}`}
+                  >
+                    清除
+                  </button>
+                </div>
               <p
                 className={`text-xs 
+                  ${listMode === 'all' && 'text-slate-100'}
                   ${listMode === 'checked' && 'text-emerald-300'}
                   ${listMode === 'unchecked' && 'text-red-300'}
                   ${listMode === 'cancelled' && 'text-amber-300'}`}
               >
+                {listMode === 'all' && '顯示所有應出席的參加者（包含已簽到、未簽到與不會出席標記）'}
                 {listMode === 'checked' && '顯示所有目前已經完成簽到的參加者'}
                 {listMode === 'unchecked' && '顯示所有目前尚未完成簽到的參加者'}
                 {listMode === 'cancelled' && '顯示所有已標記為不會出席的參加者'}
               </p>
+              </div>
             </CardHeader>
           <CardContent>
             {detailList.length === 0 ? (
@@ -265,33 +398,94 @@ export default function DashboardPage() {
                 目前尚無符合條件的紀錄
               </p>
             ) : (
-              <div className="max-h-80 overflow-y-auto space-y-2">
-                {detailList.map((a, idx) => (
-                  <div
-                    key={`${a.序號}-${a.姓名}-${idx}`}
-                    className="flex items-center justify-between py-2 px-3 text-sm bg-slate-800 rounded-md border border-slate-700"
-                  >
-                    <div>
-                      <p className="font-medium text-slate-100">
-                        <span className="mr-2 text-slate-400">{a.序號}</span>
-                        {a.姓名}
-                      </p>
-                      <p className="text-[11px] text-slate-400 mt-0.5">
-                        {a.到達時間 || '-'}
-                      </p>
+              <>
+                <div className="space-y-2">
+                  {pagedList.map((a, idx) => (
+                    <div
+                      key={`${a.序號}-${a.姓名}-${idx}`}
+                      className="flex items-center justify-between py-2 px-3 text-sm bg-slate-800 rounded-md border border-slate-700"
+                    >
+                      <div>
+                        <p className="font-medium text-slate-100">
+                          <span className="mr-2 text-slate-400">{a.序號}</span>
+                          {a.姓名}
+                        </p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          {a.到達時間 || '-'}
+                        </p>
+                      </div>
+                      {listMode === 'checked' && (
+                        <span className="text-[11px] text-emerald-300">已簽到</span>
+                      )}
+                      {listMode === 'unchecked' && (
+                        <span className="text-[11px] text-slate-400">未簽到</span>
+                      )}
+                      {listMode === 'cancelled' && (
+                        <span className="text-[11px] text-amber-300">不會出席</span>
+                      )}
+                      {listMode === 'all' && (
+                        <span className="text-[11px] font-semibold">
+                          {a.已到 === 'TRUE' && (
+                            <span className="text-emerald-300">已簽到</span>
+                          )}
+                          {a.已到 === 'CANCELLED' && (
+                            <span className="text-amber-300">不會出席</span>
+                          )}
+                          {a.已到 !== 'TRUE' && a.已到 !== 'CANCELLED' && (
+                            <span className="text-slate-300">未簽到</span>
+                          )}
+                        </span>
+                      )}
                     </div>
-                    {listMode === 'checked' && (
-                      <span className="text-[11px] text-emerald-300">已簽到</span>
-                    )}
-                    {listMode === 'unchecked' && (
-                      <span className="text-[11px] text-slate-400">未簽到</span>
-                    )}
-                    {listMode === 'cancelled' && (
-                      <span className="text-[11px] text-amber-300">不會出席</span>
-                    )}
+                  ))}
+                </div>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-3 text-[11px] text-slate-300">
+                  <span>
+                    第 {safePage} / {totalPages} 頁（每頁 {PAGE_SIZE} 筆，共 {detailList.length} 筆）
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={safePage <= 1}
+                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                      className="h-6 px-2 border-slate-600 text-slate-200 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      上一頁
+                    </Button>
+                    <div className="flex items-center gap-1 max-w-[200px] overflow-x-auto">
+                      {Array.from({ length: totalPages }, (_, i) => i + 1)
+                        .filter((page) =>
+                          page >= Math.max(1, safePage - 2) && page <= Math.min(totalPages, safePage + 2)
+                        )
+                        .map((page) => (
+                          <button
+                            key={page}
+                            type="button"
+                            onClick={() => setCurrentPage(page)}
+                            className={`min-w-[28px] h-6 rounded-full border text-[11px] px-2 transition-colors
+                              ${
+                                page === safePage
+                                  ? 'border-emerald-400 bg-emerald-500/20 text-emerald-200'
+                                  : 'border-slate-600 bg-slate-900 text-slate-200 hover:bg-slate-800'
+                              }`}
+                          >
+                            {page}
+                          </button>
+                        ))}
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={safePage >= totalPages}
+                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                      className="h-6 px-2 border-slate-600 text-slate-200 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      下一頁
+                    </Button>
                   </div>
-                ))}
-              </div>
+                </div>
+              </>
             )}
           </CardContent>
         </Card>
