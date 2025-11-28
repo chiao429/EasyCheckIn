@@ -26,6 +26,7 @@ export default function DashboardPage() {
   const [listMode, setListMode] = useState<'checked' | 'cancelled' | 'unchecked'>(
     'checked'
   );
+  const [showDetails, setShowDetails] = useState(true);
 
   const effectiveSheetId = sheetFromQuery || process.env.GOOGLE_SHEET_ID || eventId;
 
@@ -75,11 +76,6 @@ export default function DashboardPage() {
   const effectiveTotalForRate = total - cancelled;
   const rate = effectiveTotalForRate > 0 ? (checked / effectiveTotalForRate) * 100 : 0;
 
-  const recentCheckins = attendees
-    .filter((a) => a.已到 === 'TRUE')
-    .sort((a, b) => (a.到達時間 < b.到達時間 ? 1 : -1))
-    .slice(0, 8);
-
   const checkedList = attendees.filter((a) => a.已到 === 'TRUE');
   const cancelledList = attendees.filter((a) => a.已到 === 'CANCELLED');
   const uncheckedList = attendees.filter((a) => a.已到 !== 'TRUE' && a.已到 !== 'CANCELLED');
@@ -99,27 +95,35 @@ export default function DashboardPage() {
   const detailList = getDetailList();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 md:p-8">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 p-4 md:p-8">
       <div className="max-w-6xl mx-auto space-y-6">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900">出席狀況儀表板</h1>
-            <p className="text-sm text-slate-600 mt-1">
-              適合投影或主持人使用的即時出席概況畫面
-            </p>
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-100">出席狀況儀表板</h1>
+            <p className="text-sm text-slate-300 mt-1">即時出席概況畫面</p>
           </div>
           <div className="flex flex-col items-end gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={fetchData}
-              disabled={loading}
-              className="border-slate-300 text-slate-700 hover:bg-slate-100"
-            >
-              <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-              重新整理
-            </Button>
-            <p className="text-[11px] text-slate-500">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={fetchData}
+                disabled={loading}
+                className="border-slate-600 text-slate-200 bg-slate-800 hover:bg-slate-700"
+              >
+                <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                重新整理
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowDetails((prev) => !prev)}
+                className="border-slate-600 text-slate-200 bg-slate-800 hover:bg-slate-700"
+              >
+                {showDetails ? '收合名單區塊' : '展開名單區塊'}
+              </Button>
+            </div>
+            <p className="text-[11px] text-slate-400">
               最後更新時間：{lastUpdated || '尚未載入'}
             </p>
           </div>
@@ -133,137 +137,131 @@ export default function DashboardPage() {
 
         {/* KPI Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card className="cursor-default">
+          <Card className="cursor-default bg-slate-700 border-slate-600">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-slate-600">總人數</CardTitle>
-              <Users className="h-4 w-4 text-slate-400" />
+              <CardTitle className="text-sm font-medium text-slate-200">應出席人數</CardTitle>
+              <Users className="h-4 w-4 text-slate-300" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-slate-900">{total}</div>
+              <div className="text-4xl font-bold text-slate-100">{effectiveTotalForRate}</div>
+              <p className="text-xs text-slate-300 mt-1">可以清楚看出應出席的人數（不含不會來）</p>
             </CardContent>
           </Card>
 
           <Card
-            className={`border-emerald-200 bg-emerald-50/60 cursor-pointer transition-shadow hover:shadow-md ${
-              listMode === 'checked' ? 'ring-2 ring-emerald-300' : ''
+            className={`bg-emerald-600 cursor-pointer transition-all hover:shadow-md ${
+              listMode === 'checked'
+                ? 'ring-4 ring-emerald-400 shadow-lg scale-[1.02] -translate-y-0.5'
+                : 'shadow-sm'
             }`}
             onClick={() => setListMode('checked')}
           >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-emerald-700">已簽到</CardTitle>
-              <UserCheck className="h-4 w-4 text-emerald-600" />
+              <CardTitle className="text-sm font-medium text-emerald-100">實到人數</CardTitle>
+              <UserCheck className="h-4 w-4 text-emerald-200" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-emerald-700">{checked}</div>
-              <p className="text-xs text-emerald-700/80 mt-1">
-                有效人數（不含不會來）中的出席率：{rate.toFixed(1)}%
-              </p>
+              <div className="text-4xl font-bold text-emerald-100">{checked}</div>
+              <p className="text-xs text-emerald-200 mt-1">可以清楚看出目前實到（已簽到）的人數</p>
             </CardContent>
           </Card>
 
           <Card
-            className={`border-amber-200 bg-amber-50/60 cursor-pointer transition-shadow hover:shadow-md ${
-              listMode === 'cancelled' ? 'ring-2 ring-amber-300' : ''
-            }`}
-            onClick={() => setListMode('cancelled')}
-          >
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-amber-700">不會來</CardTitle>
-              <Ban className="h-4 w-4 text-amber-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-amber-700">{cancelled}</div>
-              <p className="text-xs text-amber-700/80 mt-1">
-                已由工作人員標記為不會出席的人數
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card
-            className={`border-red-200 bg-red-50/60 cursor-pointer transition-shadow hover:shadow-md ${
-              listMode === 'unchecked' ? 'ring-2 ring-red-300' : ''
+            className={`bg-red-600 cursor-pointer transition-all hover:shadow-md ${
+              listMode === 'unchecked'
+                ? 'ring-4 ring-red-400 shadow-lg scale-[1.02] -translate-y-0.5'
+                : 'shadow-sm'
             }`}
             onClick={() => setListMode('unchecked')}
           >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-red-700">尚未簽到</CardTitle>
-              <UserX className="h-4 w-4 text-red-600" />
+              <CardTitle className="text-sm font-medium text-red-100">尚未簽到人數</CardTitle>
+              <UserX className="h-4 w-4 text-red-200" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-red-700">{unchecked}</div>
-              <p className="text-xs text-red-700/80 mt-1">
-                仍在等待簽到的人數（包含可能不會來、尚未標記者）
-              </p>
+              <div className="text-4xl font-bold text-red-100">{unchecked}</div>
+              <p className="text-xs text-red-200 mt-1">可以清楚看出未簽到的人數</p>
+            </CardContent>
+          </Card>
+
+          <Card
+            className={`bg-amber-600 cursor-pointer transition-all hover:shadow-md ${
+              listMode === 'cancelled'
+                ? 'ring-4 ring-amber-400 shadow-lg scale-[1.02] -translate-y-0.5'
+                : 'shadow-sm'
+            }`}
+            onClick={() => setListMode('cancelled')}
+          >
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-amber-100">不會出席人數</CardTitle>
+              <Ban className="h-4 w-4 text-amber-200" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-4xl font-bold text-amber-100">{cancelled}</div>
+              <p className="text-xs text-amber-200 mt-1">可以清楚看出不會出席的人數</p>
             </CardContent>
           </Card>
         </div>
 
-        {/* 出席率視覺化 */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium text-slate-800">
-              出席率概況
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between text-xs text-slate-500">
-              <span>0%</span>
-              <span>{rate.toFixed(1)}%</span>
-              <span>100%</span>
-            </div>
-            <div className="w-full h-4 rounded-full bg-slate-200 overflow-hidden">
-              <div
-                className="h-4 bg-gradient-to-r from-emerald-400 to-emerald-500 transition-all"
-                style={{ width: `${Math.min(100, rate)}%` }}
-              />
-            </div>
-            <p className="text-xs text-slate-600">
-              以「有效人數 = 總人數 - 不會來」計算，目前出席率為{' '}
-              <span className="text-emerald-700 font-medium">{rate.toFixed(1)}%</span>。
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* 出席明細 */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium text-slate-800">出席明細</CardTitle>
-            <p className="text-xs text-slate-500">
-              目前顯示：
-              {listMode === 'checked' && '已簽到全名單'}
-              {listMode === 'cancelled' && '不會來全名單'}
-              {listMode === 'unchecked' && '尚未簽到全名單'}
-            </p>
-          </CardHeader>
+        {/* 名單區塊：依上方 panel 切換顯示 */}
+        {showDetails && (
+          <Card
+            className={`cursor-default transition-shadow hover:shadow-md 
+              ${listMode === 'checked' && 'border-emerald-700 bg-emerald-950/60'}
+              ${listMode === 'unchecked' && 'border-red-700 bg-red-950/60'}
+              ${listMode === 'cancelled' && 'border-amber-700 bg-amber-950/60'}`}
+          >
+            <CardHeader>
+              <CardTitle
+                className={`text-base md:text-lg font-semibold 
+                  ${listMode === 'checked' && 'text-emerald-200'}
+                  ${listMode === 'unchecked' && 'text-red-200'}
+                  ${listMode === 'cancelled' && 'text-amber-200'}`}
+              >
+                {listMode === 'checked' && '已簽到名單'}
+                {listMode === 'unchecked' && '尚未簽到名單'}
+                {listMode === 'cancelled' && '不會出席名單'}
+              </CardTitle>
+              <p
+                className={`text-xs 
+                  ${listMode === 'checked' && 'text-emerald-300'}
+                  ${listMode === 'unchecked' && 'text-red-300'}
+                  ${listMode === 'cancelled' && 'text-amber-300'}`}
+              >
+                {listMode === 'checked' && '顯示所有目前已經完成簽到的參加者'}
+                {listMode === 'unchecked' && '顯示所有目前尚未完成簽到的參加者'}
+                {listMode === 'cancelled' && '顯示所有已標記為不會出席的參加者'}
+              </p>
+            </CardHeader>
           <CardContent>
             {detailList.length === 0 ? (
-              <p className="text-sm text-slate-500 text-center py-4">
+              <p className="text-sm text-slate-400 text-center py-4">
                 目前尚無符合條件的紀錄
               </p>
             ) : (
-              <div className="max-h-80 overflow-y-auto divide-y divide-slate-200">
+              <div className="max-h-80 overflow-y-auto space-y-2">
                 {detailList.map((a, idx) => (
                   <div
                     key={`${a.序號}-${a.姓名}-${idx}`}
-                    className="flex items-center justify-between py-2 text-sm"
+                    className="flex items-center justify-between py-2 px-3 text-sm bg-slate-800 rounded-md border border-slate-700"
                   >
                     <div>
-                      <p className="font-medium text-slate-900">
-                        <span className="mr-2 text-slate-500">{a.序號}</span>
+                      <p className="font-medium text-slate-100">
+                        <span className="mr-2 text-slate-400">{a.序號}</span>
                         {a.姓名}
                       </p>
-                      <p className="text-[11px] text-slate-500 mt-0.5">
+                      <p className="text-[11px] text-slate-400 mt-0.5">
                         {a.到達時間 || '-'}
                       </p>
                     </div>
-                    {a.已到 === 'TRUE' && (
-                      <span className="text-[11px] text-emerald-700">已簽到</span>
+                    {listMode === 'checked' && (
+                      <span className="text-[11px] text-emerald-300">已簽到</span>
                     )}
-                    {a.已到 === 'CANCELLED' && (
-                      <span className="text-[11px] text-amber-700">不會來</span>
+                    {listMode === 'unchecked' && (
+                      <span className="text-[11px] text-slate-400">未簽到</span>
                     )}
-                    {a.已到 !== 'TRUE' && a.已到 !== 'CANCELLED' && (
-                      <span className="text-[11px] text-slate-500">未簽到</span>
+                    {listMode === 'cancelled' && (
+                      <span className="text-[11px] text-amber-300">不會出席</span>
                     )}
                   </div>
                 ))}
@@ -271,41 +269,154 @@ export default function DashboardPage() {
             )}
           </CardContent>
         </Card>
+        )}
 
-        {/* 最近簽到名單 */}
-        <Card>
+        {/* 出席 / 尚未簽到 / 不會出席 概況（三個圓餅圖） */}
+        <Card className="bg-slate-900/60 border border-slate-700 shadow-2xl">
           <CardHeader>
-            <CardTitle className="text-sm font-medium text-slate-800">
-              最近簽到名單
+            <CardTitle className="text-base font-semibold text-white tracking-wide flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              出席與未出席概況
             </CardTitle>
-            <p className="text-xs text-slate-500">顯示最近 8 筆簽到紀錄</p>
+            <p className="text-xs text-slate-400">用圓餅圖快速掌握目前出席、尚未簽到與不會出席的比例</p>
           </CardHeader>
-          <CardContent>
-            {recentCheckins.length === 0 ? (
-              <p className="text-sm text-slate-500 text-center py-4">
-                目前尚無簽到紀錄
-              </p>
-            ) : (
-              <div className="max-h-80 overflow-y-auto divide-y divide-slate-200">
-                {recentCheckins.map((a, idx) => (
-                  <div
-                    key={`${a.序號}-${a.姓名}-${idx}`}
-                    className="flex items-center justify-between py-2 text-sm"
-                  >
-                    <div>
-                      <p className="font-medium text-slate-900">
-                        <span className="mr-2 text-slate-500">{a.序號}</span>
-                        {a.姓名}
-                      </p>
-                      <p className="text-[11px] text-slate-500 mt-0.5">
-                        {a.到達時間}
-                      </p>
+          <CardContent className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* 出席率 */}
+              <div className="flex flex-col items-center justify-center">
+                <div className="w-full max-w-[140px] rounded-2xl bg-slate-800/60 border border-slate-700 p-4 shadow-inner">
+                  <div className="relative w-full aspect-square">
+                    <div
+                      className="absolute inset-0 rounded-full"
+                      style={{
+                        backgroundImage:
+                          rate > 0
+                            ? `conic-gradient(#22c55e 0deg ${Math.min(
+                                100,
+                                rate
+                              )}%, #e5e7eb ${Math.min(100, rate)}% 100%)`
+                            : 'conic-gradient(#e5e7eb 0deg 100%)',
+                      }}
+                    />
+                    <div className="absolute inset-4 rounded-full bg-slate-900 flex flex-col items-center justify-center border border-slate-700">
+                      <span className="text-[11px] uppercase tracking-wide text-slate-400">出席率</span>
+                      <span className="text-xl font-semibold text-white">
+                        {rate.toFixed(1)}%
+                      </span>
                     </div>
-                    <span className="text-[11px] text-emerald-700">已簽到</span>
                   </div>
-                ))}
+                  <p className="mt-3 text-xs text-slate-300 text-center">目前已簽到</p>
+                </div>
               </div>
-            )}
+
+              {/* 尚未簽到率 */}
+              <div className="flex flex-col items-center justify-center">
+                <div className="w-full max-w-[140px] rounded-2xl bg-slate-800/60 border border-slate-700 p-4 shadow-inner">
+                  <div className="relative w-full aspect-square">
+                    {(() => {
+                      const safeTotal = effectiveTotalForRate > 0 ? effectiveTotalForRate : 1;
+                      const uncheckedRate = Math.max(
+                        0,
+                        Math.min(100, (unchecked / safeTotal) * 100)
+                      );
+                      const hasData = uncheckedRate > 0;
+                      return (
+                        <div
+                          className="absolute inset-0 rounded-full"
+                          style={{
+                            backgroundImage: hasData
+                              ? `conic-gradient(#ef4444 0deg ${uncheckedRate}%, #e5e7eb ${uncheckedRate}% 100%)`
+                              : 'conic-gradient(#e5e7eb 0deg 100%)',
+                          }}
+                        />
+                      );
+                    })()}
+                    <div className="absolute inset-4 rounded-full bg-slate-900 flex flex-col items-center justify-center border border-slate-700">
+                      <span className="text-[11px] uppercase tracking-wide text-slate-400">尚未簽到率</span>
+                      <span className="text-xl font-semibold text-white">
+                        {effectiveTotalForRate > 0
+                          ? ((unchecked / effectiveTotalForRate) * 100).toFixed(1)
+                          : '0.0'}
+                        %
+                      </span>
+                    </div>
+                  </div>
+                  <p className="mt-3 text-xs text-slate-300 text-center">仍需到場</p>
+                </div>
+              </div>
+
+              {/* 不會出席率 */}
+              <div className="flex flex-col items-center justify-center">
+                <div className="w-full max-w-[140px] rounded-2xl bg-slate-800/60 border border-slate-700 p-4 shadow-inner">
+                  <div className="relative w-full aspect-square">
+                    {(() => {
+                      const safeTotal = effectiveTotalForRate > 0 ? effectiveTotalForRate : 1;
+                      const cancelledRate = Math.max(
+                        0,
+                        Math.min(100, (cancelled / safeTotal) * 100)
+                      );
+                      const hasData = cancelledRate > 0;
+                      return (
+                        <div
+                          className="absolute inset-0 rounded-full"
+                          style={{
+                            backgroundImage: hasData
+                              ? `conic-gradient(#f97316 0deg ${cancelledRate}%, #e5e7eb ${cancelledRate}% 100%)`
+                              : 'conic-gradient(#e5e7eb 0deg 100%)',
+                          }}
+                        />
+                      );
+                    })()}
+                    <div className="absolute inset-4 rounded-full bg-slate-900 flex flex-col items-center justify-center border border-slate-700">
+                      <span className="text-[11px] uppercase tracking-wide text-slate-400">不會出席率</span>
+                      <span className="text-xl font-semibold text-white">
+                        {effectiveTotalForRate > 0
+                          ? ((cancelled / effectiveTotalForRate) * 100).toFixed(1)
+                          : '0.0'}
+                        %
+                      </span>
+                    </div>
+                  </div>
+                  <p className="mt-3 text-xs text-slate-300 text-center">已回報不會來</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3 text-xs text-slate-200">
+              <p className="leading-relaxed">
+                目前出席率為{' '}
+                <span className="text-emerald-300 font-semibold">{rate.toFixed(1)}%</span>，
+                尚未簽到約{' '}
+                <span className="text-slate-200 font-semibold">
+                  {effectiveTotalForRate > 0
+                    ? ((unchecked / effectiveTotalForRate) * 100).toFixed(1)
+                    : '0.0'}
+                  %
+                </span>
+                ，不會出席約{' '}
+                <span className="text-amber-300 font-semibold">
+                  {effectiveTotalForRate > 0
+                    ? ((cancelled / effectiveTotalForRate) * 100).toFixed(1)
+                    : '0.0'}
+                  %
+                </span>
+                。
+              </p>
+              <div className="flex flex-wrap items-center gap-4 text-[13px]">
+                <div className="flex items-center gap-1">
+                  <span className="w-3 h-3 rounded-full bg-emerald-400" />
+                  <span>已簽到（實到人數）：{checked}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="w-3 h-3 rounded-full bg-slate-400" />
+                  <span>尚未簽到人數：{unchecked}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="w-3 h-3 rounded-full bg-amber-300" />
+                  <span>不會出席人數：{cancelled}</span>
+                </div>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
