@@ -1,0 +1,13 @@
+{
+  "buildCommand": "npm run build",
+  "devCommand": "npm run dev",
+  "installCommand": "npm install",
+  "framework": "nextjs",
+  "regions": ["hnd1"],
+  "env": {
+    "GOOGLE_SERVICE_ACCOUNT_EMAIL": "sheets-access@ppc-kids.iam.gserviceaccount.com",
+    "GOOGLE_PRIVATE_KEY": "@google_private_key",
+    "GOOGLE_SHEET_ID": "@google_sheet_id",
+    "ADMIN_PASSWORD": "@admin_password"
+  }
+}
