@@ -1,5 +1,14 @@
 import { google } from 'googleapis';
 
+// 共用：從 Google Sheet 連結或 ID 中抽出 Sheet ID
+export function extractSheetIdFromUrl(urlOrId: string): string {
+  if (!urlOrId) return '';
+  if (!urlOrId.includes('docs.google.com')) return urlOrId.trim();
+
+  const match = urlOrId.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  return match ? match[1] : urlOrId.trim();
+}
+
 // Google Sheets API 客戶端
 export function getGoogleSheetsClient() {
   const auth = new google.auth.GoogleAuth({
@@ -207,4 +216,142 @@ export async function searchAttendee(
   return allAttendees.filter((attendee) =>
     attendee.姓名.toLowerCase().includes(lowerQuery)
   );
+}
+
+// 紀錄管理員相關操作（例如代為簽到、取消簽到、標記不會來）
+// 以 eventId 為主鍵從活動設定表中找到對應列，依據該列 E 欄的 log sheet 連結寫入紀錄
+export async function logManagerAction(params: {
+  eventId: string;
+  action:
+    | 'manager_checkin'
+    | 'manager_checkin_failed'
+    | 'cancel_checkin'
+    | 'cancel_checkin_failed'
+    | 'mark_cancelled'
+    | 'mark_cancelled_failed';
+  identifier: string;
+  attendeeName?: string;
+  result: 'SUCCESS' | 'FAILED';
+  message?: string;
+  operator?: string;
+}) {
+  const { eventId, action, identifier, attendeeName, result, message, operator } = params;
+
+  const configSheetId = process.env.GOOGLE_EVENT_CONFIG_SHEET_ID;
+  if (!configSheetId) {
+    console.error('GOOGLE_EVENT_CONFIG_SHEET_ID is not set, skip manager log');
+    return;
+  }
+
+  const sheets = getGoogleSheetsClient();
+
+  try {
+    // 讀取活動設定表，假設結構：
+    // A: 活動名稱
+    // B: 活動試算表連結
+    // C: eventId
+    // D: 備註
+    // E: 操作紀錄連結（log Sheet 連結）
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: configSheetId,
+      range: 'A2:E',
+    });
+
+    const rows = response.data.values || [];
+
+    let logSheetId: string | null = null;
+
+    for (const row of rows) {
+      const rowEventId = (row[2] || '').toString();
+      if (!rowEventId) continue;
+
+      if (rowEventId === eventId) {
+        const logSheetLink = row[4] || '';
+        if (!logSheetLink) {
+          console.warn('No log sheet link configured for eventId:', eventId);
+          return;
+        }
+        logSheetId = extractSheetIdFromUrl(logSheetLink);
+        break;
+      }
+    }
+
+    if (!logSheetId) {
+      console.warn('logManagerAction: cannot find matching log sheet for eventId', eventId);
+      return;
+    }
+
+    console.log('logManagerAction: using logSheetId for eventId', {
+      eventId,
+      logSheetId,
+      action,
+    });
+
+    const now = new Date().toLocaleString('zh-TW', {
+      timeZone: 'Asia/Taipei',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+
+    // 將內部動作代碼轉成中文描述
+    const displayAction = (() => {
+      switch (action) {
+        case 'manager_checkin':
+          return '代為簽到-成功';
+        case 'manager_checkin_failed':
+          return '代為簽到-失敗';
+        case 'cancel_checkin':
+          return '取消簽到-成功';
+        case 'cancel_checkin_failed':
+          return '取消簽到-失敗';
+        case 'mark_cancelled':
+          return '標記不會來-成功';
+        case 'mark_cancelled_failed':
+          return '標記不會來-失敗';
+        default:
+          return action;
+      }
+    })();
+
+    // 確保 log Sheet 有標題列
+    const headerResponse = await sheets.spreadsheets.values.get({
+      spreadsheetId: logSheetId,
+      range: 'A1:G1',
+    });
+
+    if (!headerResponse.data.values || headerResponse.data.values.length === 0) {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: logSheetId,
+        range: 'A1:G1',
+        valueInputOption: 'RAW',
+        requestBody: {
+          values: [['時間', '操作人員', '動作', '序號', '姓名', '操作結果', '備註']],
+        },
+      });
+    }
+
+    // 寫入一筆 log 記錄（欄位順序：時間, 操作人員, 動作, 序號, 姓名, 操作結果, 備註）
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: logSheetId,
+      range: 'A:G',
+      valueInputOption: 'RAW',
+      requestBody: {
+        values: [[
+          now,
+          operator || '',
+          displayAction,
+          identifier,
+          attendeeName || '',
+          result,
+          message && message.trim() ? message : '-',
+        ]],
+      },
+    });
+  } catch (error) {
+    console.error('Error logging manager action:', error);
+  }
 }

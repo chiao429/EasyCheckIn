@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getGoogleSheetsClient } from '@/lib/google-sheets';
+import { getGoogleSheetsClient, logManagerAction } from '@/lib/google-sheets';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { sheetId, identifier } = body;
+    const { sheetId, identifier, eventId, operator, attendeeName } = body;
 
-    if (!sheetId || !identifier) {
+    if (!sheetId || !identifier || !eventId) {
       return NextResponse.json(
-        { success: false, message: '缺少 sheetId 或 identifier' },
+        { success: false, message: '缺少 sheetId、identifier 或 eventId' },
         { status: 400 }
       );
     }
@@ -32,6 +32,17 @@ export async function POST(request: NextRequest) {
     }
 
     if (rowIndex === -1) {
+      // 紀錄管理員操作：標記不會來失敗（找不到資料）
+      await logManagerAction({
+        eventId,
+        action: 'mark_cancelled_failed',
+        identifier,
+        attendeeName,
+        result: 'FAILED',
+        message: '找不到此序號或姓名',
+        operator,
+      });
+
       return NextResponse.json(
         { success: false, message: '找不到此序號或姓名' },
         { status: 404 }
@@ -49,12 +60,46 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // 紀錄管理員操作：標記不會來
+    await logManagerAction({
+      eventId,
+      action: 'mark_cancelled',
+      identifier,
+      attendeeName,
+      result: 'SUCCESS',
+      message: '',
+      operator,
+    });
+
     return NextResponse.json({
       success: true,
       message: '已標記為不會來',
     });
   } catch (error) {
     console.error('Manager mark-cancelled error:', error);
+
+    // 嘗試寫入失敗 log
+    try {
+      const body = await request.json().catch(() => null);
+      const identifier = body?.identifier as string | undefined;
+      const eventId = body?.eventId as string | undefined;
+      const operator = body?.operator as string | undefined;
+      const attendeeName = body?.attendeeName as string | undefined;
+      if (identifier && eventId) {
+        await logManagerAction({
+          eventId,
+          action: 'mark_cancelled_failed',
+          identifier,
+          attendeeName,
+          result: 'FAILED',
+          message: '標記不會來時發生錯誤',
+          operator,
+        });
+      }
+    } catch (logError) {
+      console.error('Manager mark-cancelled logging error:', logError);
+    }
+
     return NextResponse.json(
       { success: false, message: '標記不會來時發生錯誤' },
       { status: 500 }

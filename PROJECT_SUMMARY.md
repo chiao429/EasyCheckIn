@@ -137,7 +137,7 @@ EasyCheck/
 
 **參數**：
 - `sheetId`: Sheet ID
-- `query`: 搜尋關鍵字
+- `query`: 搜尋關鍵字（可輸入序號或姓名的一部分）
 
 **回應**：
 ```json
@@ -145,6 +145,53 @@ EasyCheck/
   "success": true,
   "data": [...],
   "count": 5
+}
+```
+
+### POST /api/admin/login
+管理後台登入驗證
+
+**請求**：
+```json
+{
+  "password": "後台密碼"
+}
+```
+
+**回應（成功）**：
+```json
+{
+  "success": true
+}
+```
+
+**回應（失敗）**：
+```json
+{
+  "success": false,
+  "message": "密碼錯誤"
+}
+```
+
+### POST /api/manager/cancel-checkin
+管理員取消簽到（將某筆資料恢復為「未簽到」狀態）
+
+**請求**：
+```json
+{
+  "sheetId": "1ABC...XYZ",
+  "identifier": "001" // 序號或姓名
+}
+```
+
+### POST /api/manager/mark-cancelled
+管理員將參加者標記為「不會來」
+
+**請求**：
+```json
+{
+  "sheetId": "1ABC...XYZ",
+  "identifier": "001" // 序號或姓名
 }
 ```
 
@@ -189,15 +236,12 @@ EasyCheck/
 ## 環境變數說明
 
 ### 伺服器端變數（不公開）
-- `GOOGLE_CLIENT_EMAIL`: 服務帳號 email
-- `GOOGLE_PRIVATE_KEY`: 服務帳號私鑰
-- `GOOGLE_SHEET_ID`: Google Sheet ID
-- `ADMIN_PASSWORD`: 管理員密碼
+- `GOOGLE_SERVICE_ACCOUNT_EMAIL`: Google Service Account email
+- `GOOGLE_PRIVATE_KEY`: Google Service Account 私鑰
+- `GOOGLE_EVENT_CONFIG_SHEET_ID`: 活動設定試算表的 Sheet ID（存放活動清單與後台密碼）
 
 ### 客戶端變數（公開）
 - `NEXT_PUBLIC_BASE_URL`: 網站基礎網址
-- `NEXT_PUBLIC_SHEET_ID`: Google Sheet ID
-- `NEXT_PUBLIC_ADMIN_PASSWORD`: 管理員密碼
 
 ## 安全性設計
 

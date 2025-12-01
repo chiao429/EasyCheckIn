@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { checkIn } from '@/lib/google-sheets';
+import { checkIn, logManagerAction } from '@/lib/google-sheets';
 
 // 簡單的併發/速率限制：每個執行個體每分鐘最多允許 30 次簽到請求
 // 注意：這是記憶體內的計數，對單一 serverless function 實例有效，
@@ -40,7 +40,14 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { identifier, sheetId } = body;
+    const { identifier, sheetId, source, eventId, operator, attendeeName } = body as {
+      identifier?: string;
+      sheetId?: string;
+      source?: 'self' | 'manager';
+      eventId?: string;
+      operator?: string;
+      attendeeName?: string;
+    };
 
     if (!identifier || !sheetId) {
       return NextResponse.json(
@@ -50,6 +57,24 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await checkIn(sheetId, identifier);
+
+    // 若是由 manager 代為簽到，記錄成功/失敗 log
+    if (source === 'manager' && eventId) {
+      try {
+        await logManagerAction({
+          eventId,
+          action: result.success ? 'manager_checkin' : 'manager_checkin_failed',
+          identifier,
+          attendeeName,
+          result: result.success ? 'SUCCESS' : 'FAILED',
+          message: result.success ? '' : result.message,
+          operator,
+        });
+      } catch (logError) {
+        console.error('Manager check-in logging error:', logError);
+      }
+    }
+
     return NextResponse.json(result);
   } catch (error) {
     console.error('Check-in API error:', error);

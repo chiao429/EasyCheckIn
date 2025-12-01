@@ -1,13 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getGoogleSheetsClient } from '@/lib/google-sheets';
-
-function extractSheetIdFromUrl(urlOrId: string): string {
-  if (!urlOrId) return '';
-  if (!urlOrId.includes('docs.google.com')) return urlOrId.trim();
-
-  const match = urlOrId.match(/\/d\/([a-zA-Z0-9_-]+)/);
-  return match ? match[1] : urlOrId.trim();
-}
+import { getGoogleSheetsClient, extractSheetIdFromUrl } from '@/lib/google-sheets';
 
 export async function GET(_req: NextRequest) {
   try {

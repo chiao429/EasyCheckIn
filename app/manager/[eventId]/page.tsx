@@ -59,6 +59,10 @@ export default function ManagerPage() {
         body: JSON.stringify({
           sheetId: effectiveSheetId,
           identifier: selected.序號 || selected.姓名,
+          source: 'manager',
+          eventId,
+          attendeeName: selected.姓名,
+          operator: staffName,
         }),
       });
       const data = await response.json();
@@ -148,6 +152,9 @@ export default function ManagerPage() {
         body: JSON.stringify({
           sheetId: effectiveSheetId,
           identifier: selected.序號 || selected.姓名,
+          eventId,
+          attendeeName: selected.姓名,
+          operator: staffName,
         }),
       });
       const data = await response.json();
@@ -179,6 +186,9 @@ export default function ManagerPage() {
         body: JSON.stringify({
           sheetId: effectiveSheetId,
           identifier: selected.序號 || selected.姓名,
+          eventId,
+          attendeeName: selected.姓名,
+          operator: staffName,
         }),
       });
       const data = await response.json();

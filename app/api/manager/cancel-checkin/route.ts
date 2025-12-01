@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getGoogleSheetsClient } from '@/lib/google-sheets';
+import { getGoogleSheetsClient, logManagerAction } from '@/lib/google-sheets';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { sheetId, identifier } = body;
+    const { sheetId, identifier, eventId, operator, attendeeName } = body;
 
-    if (!sheetId || !identifier) {
+    if (!sheetId || !identifier || !eventId) {
       return NextResponse.json(
-        { success: false, message: '缺少 sheetId 或 identifier' },
+        { success: false, message: '缺少 sheetId、identifier 或 eventId' },
         { status: 400 }
       );
     }
@@ -32,6 +32,17 @@ export async function POST(request: NextRequest) {
     }
 
     if (rowIndex === -1) {
+      // 紀錄管理員操作：取消簽到失敗（找不到資料）
+      await logManagerAction({
+        eventId,
+        action: 'cancel_checkin_failed',
+        identifier,
+        attendeeName,
+        result: 'FAILED',
+        message: '找不到此序號或姓名',
+        operator,
+      });
+
       return NextResponse.json(
         { success: false, message: '找不到此序號或姓名' },
         { status: 404 }
@@ -49,12 +60,46 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // 紀錄管理員操作：取消簽到
+    await logManagerAction({
+      eventId,
+      action: 'cancel_checkin',
+      identifier,
+      attendeeName,
+      result: 'SUCCESS',
+      message: '',
+      operator,
+    });
+
     return NextResponse.json({
       success: true,
       message: '已取消簽到，狀態恢復為未簽到',
     });
   } catch (error) {
     console.error('Manager cancel-checkin error:', error);
+
+    // 嘗試寫入失敗 log（若 eventId 或 identifier 缺失就略過）
+    try {
+      const body = await request.json().catch(() => null);
+      const identifier = body?.identifier as string | undefined;
+      const eventId = body?.eventId as string | undefined;
+      const operator = body?.operator as string | undefined;
+      const attendeeName = body?.attendeeName as string | undefined;
+      if (identifier && eventId) {
+        await logManagerAction({
+          eventId,
+          action: 'cancel_checkin_failed',
+          identifier,
+          attendeeName,
+          result: 'FAILED',
+          message: '取消簽到時發生錯誤',
+          operator,
+        });
+      }
+    } catch (logError) {
+      console.error('Manager cancel-checkin logging error:', logError);
+    }
+
     return NextResponse.json(
       { success: false, message: '取消簽到時發生錯誤' },
       { status: 500 }
