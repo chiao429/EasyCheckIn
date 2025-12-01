@@ -15,6 +15,9 @@ import {
   Lock
 } from 'lucide-react';
 
+const ADMIN_SESSION_KEY = 'easycheckin_admin_session';
+const ADMIN_SESSION_DURATION_MS = 15 * 60 * 1000;
+
 interface Attendee {
   序號: string;
   姓名: string;
@@ -57,6 +60,7 @@ export default function AdminPage() {
   const [concurrentRunning, setConcurrentRunning] = useState(false);
   const [concurrentStats, setConcurrentStats] = useState({ success: 0, failed: 0, limited: 0 });
   const [concurrentMessage, setConcurrentMessage] = useState<string | null>(null);
+  const [sessionExpiry, setSessionExpiry] = useState<number | null>(null);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -78,6 +82,16 @@ export default function AdminPage() {
       const data = await response.json();
 
       if (response.ok && data.success) {
+        const expiresAt = Date.now() + ADMIN_SESSION_DURATION_MS;
+        try {
+          window.localStorage.setItem(
+            ADMIN_SESSION_KEY,
+            JSON.stringify({ eventId, expiresAt })
+          );
+        } catch (e) {
+          console.error('Failed to persist admin session:', e);
+        }
+        setSessionExpiry(expiresAt);
         setAuthenticated(true);
         fetchAttendees('all');
       } else {
@@ -530,6 +544,54 @@ export default function AdminPage() {
     link.download = `attendees_${eventId}_${new Date().toISOString().split('T')[0]}.csv`;
     link.click();
   };
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(ADMIN_SESSION_KEY);
+      if (!raw) {
+        return;
+      }
+      const parsed = JSON.parse(raw) as { eventId?: string; expiresAt?: number };
+      if (!parsed || !parsed.eventId || typeof parsed.expiresAt !== 'number') {
+        window.localStorage.removeItem(ADMIN_SESSION_KEY);
+        return;
+      }
+      if (parsed.eventId !== eventId) {
+        return;
+      }
+      if (Date.now() > parsed.expiresAt) {
+        window.localStorage.removeItem(ADMIN_SESSION_KEY);
+        return;
+      }
+      setSessionExpiry(parsed.expiresAt);
+      setAuthenticated(true);
+    } catch (e) {
+      console.error('Failed to restore admin session:', e);
+    }
+  }, [eventId]);
+
+  useEffect(() => {
+    if (!authenticated || !sessionExpiry) {
+      return;
+    }
+    const interval = window.setInterval(() => {
+      if (Date.now() > sessionExpiry) {
+        try {
+          window.localStorage.removeItem(ADMIN_SESSION_KEY);
+        } catch (e) {
+          console.error('Failed to clear expired admin session:', e);
+        }
+        setAuthenticated(false);
+        setPassword('');
+        setSessionExpiry(null);
+        alert('後台登入已超過 15 分鐘，請重新登入');
+      }
+    }, 30_000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [authenticated, sessionExpiry]);
 
   useEffect(() => {
     if (authenticated) {
