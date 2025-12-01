@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAllAttendees } from '@/lib/google-sheets';
+import { getAllAttendees, logManagerAction } from '@/lib/google-sheets';
 
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const sheetId = searchParams.get('sheetId');
     const filter = searchParams.get('filter'); // 'all', 'checked', 'unchecked'
+    const eventId = searchParams.get('eventId') || undefined;
 
     if (!sheetId) {
       return NextResponse.json(
@@ -30,6 +31,26 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error('Attendees API error:', error);
+
+    // 若有 eventId，寫入系統錯誤 log
+    try {
+      const searchParams = request.nextUrl.searchParams;
+      const eventId = searchParams.get('eventId') || undefined;
+      if (eventId) {
+        await logManagerAction({
+          eventId,
+          action: 'system_error',
+          identifier: '/api/attendees',
+          result: 'FAILED',
+          message:
+            'Attendees API error: ' +
+            (error instanceof Error ? error.message : String(error ?? 'unknown error')),
+          operator: 'System',
+        });
+      }
+    } catch (logError) {
+      console.error('System error logging failed (attendees):', logError);
+    }
     return NextResponse.json(
       { success: false, message: '無法取得參加者資料' },
       { status: 500 }

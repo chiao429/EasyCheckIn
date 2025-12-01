@@ -98,7 +98,7 @@ export default function ManagerPage() {
       const response = await fetch(
         `/api/search?sheetId=${encodeURIComponent(effectiveSheetId)}&query=${encodeURIComponent(
           keyword.trim()
-        )}`
+        )}&eventId=${encodeURIComponent(eventId)}`
       );
       const data = await response.json();
 
@@ -127,7 +127,7 @@ export default function ManagerPage() {
       const response = await fetch(
         `/api/search?sheetId=${encodeURIComponent(effectiveSheetId)}&query=${encodeURIComponent(
           identifier
-        )}`
+        )}&eventId=${encodeURIComponent(eventId)}`
       );
       const data = await response.json();
       if (data.success && data.data && data.data.length > 0) {

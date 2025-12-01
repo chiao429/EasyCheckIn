@@ -228,7 +228,10 @@ export async function logManagerAction(params: {
     | 'cancel_checkin'
     | 'cancel_checkin_failed'
     | 'mark_cancelled'
-    | 'mark_cancelled_failed';
+    | 'mark_cancelled_failed'
+    | 'admin_login'
+    | 'system_error'
+    | 'system_warning';
   identifier: string;
   attendeeName?: string;
   result: 'SUCCESS' | 'FAILED';
@@ -312,6 +315,12 @@ export async function logManagerAction(params: {
           return '標記不會來-成功';
         case 'mark_cancelled_failed':
           return '標記不會來-失敗';
+        case 'admin_login':
+          return '後台登入-成功';
+        case 'system_error':
+          return '系統錯誤';
+        case 'system_warning':
+          return '系統警告';
         default:
           return action;
       }

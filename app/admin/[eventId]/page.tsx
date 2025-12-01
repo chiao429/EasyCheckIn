@@ -44,8 +44,19 @@ export default function AdminPage() {
   const [loadTestCount, setLoadTestCount] = useState(10);
   const [loadTestRunning, setLoadTestRunning] = useState(false);
   const [loadTestStats, setLoadTestStats] = useState({ success: 0, failed: 0, limited: 0 });
+  const [loadTestMessage, setLoadTestMessage] = useState<string | null>(null);
   const [showTools, setShowTools] = useState(false);
   const [rowActionLoading, setRowActionLoading] = useState<string | null>(null);
+  const [pageSize, setPageSize] = useState(10);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [randomWriteCount, setRandomWriteCount] = useState(10);
+  const [randomWriteRunning, setRandomWriteRunning] = useState(false);
+  const [randomWriteStats, setRandomWriteStats] = useState({ success: 0, failed: 0, limited: 0 });
+  const [randomWriteMessage, setRandomWriteMessage] = useState<string | null>(null);
+  const [concurrentCount, setConcurrentCount] = useState(10);
+  const [concurrentRunning, setConcurrentRunning] = useState(false);
+  const [concurrentStats, setConcurrentStats] = useState({ success: 0, failed: 0, limited: 0 });
+  const [concurrentMessage, setConcurrentMessage] = useState<string | null>(null);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,13 +65,14 @@ export default function AdminPage() {
       return;
     }
 
+    let lastLimitedMessage: string | null = null;
     try {
       const response = await fetch('/api/admin/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ password: password.trim() }),
+        body: JSON.stringify({ password: password.trim(), eventId }),
       });
 
       const data = await response.json();
@@ -77,7 +89,8 @@ export default function AdminPage() {
     }
   };
 
-  const handleRowCancelCheckIn = async (identifier: string) => {
+  const handleRowCancelCheckIn = async (attendee: Attendee) => {
+    const identifier = attendee.序號 || attendee.姓名;
     if (!identifier) return;
     setRowActionLoading(identifier + '-cancel');
     try {
@@ -89,6 +102,9 @@ export default function AdminPage() {
         body: JSON.stringify({
           sheetId: sheetFromQuery || process.env.GOOGLE_SHEET_ID || eventId,
           identifier,
+          eventId,
+          attendeeName: attendee.姓名,
+          operator: 'Admin後台',
         }),
       });
       const data = await response.json();
@@ -103,7 +119,8 @@ export default function AdminPage() {
     }
   };
 
-  const handleRowMarkCancelled = async (identifier: string) => {
+  const handleRowMarkCancelled = async (attendee: Attendee) => {
+    const identifier = attendee.序號 || attendee.姓名;
     if (!identifier) return;
     setRowActionLoading(identifier + '-cancelled');
     try {
@@ -113,8 +130,11 @@ export default function AdminPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          sheetId: sheetFromQuery || process.env.NEXT_PUBLIC_SHEET_ID || eventId,
+          sheetId: sheetFromQuery || process.env.GOOGLE_SHEET_ID || eventId,
           identifier,
+          eventId,
+          attendeeName: attendee.姓名,
+          operator: 'Admin後台',
         }),
       });
       const data = await response.json();
@@ -133,13 +153,14 @@ export default function AdminPage() {
     setLoading(true);
     try {
       const response = await fetch(
-        `/api/attendees?sheetId=${sheetFromQuery || process.env.GOOGLE_SHEET_ID || eventId}&filter=${filter}`
+        `/api/attendees?sheetId=${sheetFromQuery || process.env.GOOGLE_SHEET_ID || eventId}&filter=${filter}&eventId=${encodeURIComponent(eventId)}`
       );
       const data = await response.json();
       
       if (data.success) {
         setAttendees(data.data);
         updateStats(data.data);
+        setCurrentPage(1);
       }
     } catch (error) {
       console.error('Error fetching attendees:', error);
@@ -154,12 +175,15 @@ export default function AdminPage() {
     setLoading(true);
     try {
       const response = await fetch(
-        `/api/search?sheetId=${sheetFromQuery || process.env.GOOGLE_SHEET_ID || eventId}&query=${encodeURIComponent(searchQuery)}`
+        `/api/search?sheetId=${sheetFromQuery || process.env.GOOGLE_SHEET_ID || eventId}&query=${encodeURIComponent(
+          searchQuery
+        )}&eventId=${encodeURIComponent(eventId)}`
       );
       const data = await response.json();
       
       if (data.success) {
         setSearchResults(data.data);
+        setCurrentPage(1);
       }
     } catch (error) {
       console.error('Error searching:', error);
@@ -179,6 +203,7 @@ export default function AdminPage() {
 
   const handleTabChange = (tab: 'all' | 'checked' | 'unchecked' | 'search') => {
     setActiveTab(tab);
+    setCurrentPage(1);
     if (tab !== 'search') {
       fetchAttendees(tab);
     }
@@ -226,7 +251,9 @@ export default function AdminPage() {
 
     try {
       const response = await fetch(
-        `/api/attendees?sheetId=${sheetFromQuery || process.env.GOOGLE_SHEET_ID || eventId}&filter=all`
+        `/api/attendees?sheetId=${sheetFromQuery || process.env.GOOGLE_SHEET_ID || eventId}&filter=all&eventId=${encodeURIComponent(
+          eventId
+        )}`
       );
       const data = await response.json();
 
@@ -248,11 +275,13 @@ export default function AdminPage() {
     setLoadTestCount(count);
     setLoadTestRunning(true);
     setLoadTestStats({ success: 0, failed: 0, limited: 0 });
+    setLoadTestMessage(null);
 
     let success = 0;
     let failed = 0;
     let limited = 0;
 
+    let lastLimitedMessage: string | null = null;
     try {
       const requests = Array.from({ length: count }).map(async (_, index) => {
         try {
@@ -270,14 +299,18 @@ export default function AdminPage() {
           const data = await response.json();
           if (response.status === 429) {
             limited += 1;
+            if (typeof data?.message === 'string') {
+              lastLimitedMessage = data.message;
+            }
           } else if (data.success) {
             success += 1;
           } else {
             failed += 1;
+            console.log('Load test failed identifier', `LOADTEST-${index + 1}`, 'response:', data);
           }
         } catch (error) {
           failed += 1;
-          console.error('Load test request error:', error);
+          console.error('Load test request error for identifier', `LOADTEST-${index + 1}`, error);
         }
       });
 
@@ -286,15 +319,210 @@ export default function AdminPage() {
       setLoadTestStats({ success, failed, limited });
       setLoadTestRunning(false);
       fetchAttendees(activeTab === 'search' ? 'all' : activeTab);
+      if (lastLimitedMessage) {
+        setLoadTestMessage(lastLimitedMessage);
+      }
+      try {
+        await fetch('/api/admin/log-loadtest-summary', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            eventId,
+            type: 'loadtest',
+            success,
+            failed,
+            limited,
+          }),
+        });
+      } catch (e) {
+        console.error('Failed to log loadtest summary:', e);
+      }
+    }
+  };
+
+  const handleRandomWriteTest = async () => {
+    const dataSource = activeTab === 'search' ? searchResults : attendees;
+    // 只從「尚未簽到、且不是 CANCELLED」的名單中挑選
+    const available = dataSource.filter(
+      (a) => {
+        const serial = (a.序號 || '').trim();
+        // 排除 1~5 號，保留給手動測試
+        const isProtected = ['1', '2', '3', '4', '5'].includes(serial);
+        return a.已到 !== 'TRUE' && a.已到 !== 'CANCELLED' && !isProtected;
+      }
+    );
+    const total = available.length;
+    if (total === 0) {
+      setRandomWriteStats({ success: 0, failed: 0, limited: 0 });
+      return;
+    }
+
+    const count = Math.max(1, Math.min(randomWriteCount, total));
+    setRandomWriteCount(count);
+    setRandomWriteRunning(true);
+    setRandomWriteStats({ success: 0, failed: 0, limited: 0 });
+    setRandomWriteMessage(null);
+
+    let success = 0;
+    let failed = 0;
+    let limited = 0;
+    let lastLimitedMessage: string | null = null;
+
+    try {
+      // 隨機挑選 count 個不重複的參加者（僅限尚未簽到且非 CANCELLED）
+      const shuffled = [...available].sort(() => Math.random() - 0.5);
+      const selected = shuffled.slice(0, count);
+
+      const requests = selected.map(async (attendee) => {
+        const identifier = attendee.序號 || attendee.姓名;
+        if (!identifier) {
+          failed += 1;
+          console.log('Random write test failed: empty identifier for attendee', attendee);
+          return;
+        }
+        try {
+          const response = await fetch('/api/checkin', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              identifier,
+              sheetId: sheetFromQuery || process.env.GOOGLE_SHEET_ID || eventId,
+            }),
+          });
+
+          const data = await response.json();
+          if (response.status === 429) {
+            limited += 1;
+          } else if (data.success) {
+            success += 1;
+          } else {
+            failed += 1;
+          }
+        } catch (error) {
+          failed += 1;
+          console.error('Random write test request error:', error);
+        }
+      });
+
+      await Promise.all(requests);
+    } finally {
+      setRandomWriteStats({ success, failed, limited });
+      setRandomWriteRunning(false);
+      fetchAttendees(activeTab === 'search' ? 'all' : activeTab);
+      if (lastLimitedMessage) {
+        setRandomWriteMessage(lastLimitedMessage);
+      }
+      try {
+        await fetch('/api/admin/log-loadtest-summary', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            eventId,
+            type: 'random_write',
+            success,
+            failed,
+            limited,
+          }),
+        });
+      } catch (e) {
+        console.error('Failed to log random write summary:', e);
+      }
+    }
+  };
+
+  const handleConcurrentTest = async () => {
+    const dataSource = activeTab === 'search' ? searchResults : attendees;
+    // 只從「尚未簽到、且不是 CANCELLED」的名單中挑選
+    const available = dataSource.filter(
+      (a) => {
+        const serial = (a.序號 || '').trim();
+        // 排除 1~5 號，保留給手動測試
+        const isProtected = ['1', '2', '3', '4', '5'].includes(serial);
+        return a.已到 !== 'TRUE' && a.已到 !== 'CANCELLED' && !isProtected;
+      }
+    );
+    const total = available.length;
+    if (total === 0) {
+      setConcurrentStats({ success: 0, failed: 0, limited: 0 });
+      return;
+    }
+
+    const count = Math.max(1, Math.min(concurrentCount, total));
+    setConcurrentCount(count);
+    setConcurrentRunning(true);
+    setConcurrentStats({ success: 0, failed: 0, limited: 0 });
+    setConcurrentMessage(null);
+
+    let success = 0;
+    let failed = 0;
+    let limited = 0;
+    let lastLimitedMessage: string | null = null;
+
+    try {
+      // 隨機挑選 count 個不重複的參加者，並同時發送簽到請求
+      const shuffled = [...available].sort(() => Math.random() - 0.5);
+      const selected = shuffled.slice(0, count);
+
+      const requests = selected.map(async (attendee) => {
+        const identifier = attendee.序號 || attendee.姓名;
+        if (!identifier) {
+          failed += 1;
+          return;
+        }
+        try {
+          const response = await fetch('/api/checkin', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              identifier,
+              sheetId: sheetFromQuery || process.env.GOOGLE_SHEET_ID || eventId,
+            }),
+          });
+
+          const data = await response.json();
+          if (response.status === 429) {
+            limited += 1;
+          } else if (data.success) {
+            success += 1;
+          } else {
+            failed += 1;
+          }
+        } catch (error) {
+          failed += 1;
+          console.error('Concurrent test request error:', error);
+        }
+      });
+
+      await Promise.all(requests);
+    } finally {
+      setConcurrentStats({ success, failed, limited });
+      setConcurrentRunning(false);
+      fetchAttendees(activeTab === 'search' ? 'all' : activeTab);
+      if (lastLimitedMessage) {
+        setConcurrentMessage(lastLimitedMessage);
+      }
     }
   };
 
   const exportToCSV = () => {
     const data = activeTab === 'search' ? searchResults : attendees;
     const csv = [
-      ['序號', '姓名', '到達時間', '已到'],
-      ...data.map(a => [a.序號, a.姓名, a.到達時間, a.已到])
-    ].map(row => row.join(',')).join('\n');
+      ['序號', '姓名', '到達時間', '狀態'],
+      ...data.map((a) => {
+        const status = a.已到 === 'TRUE' ? '已簽到' : a.已到 === 'CANCELLED' ? '取消' : '未簽到';
+        return [a.序號, a.姓名, a.到達時間, status];
+      }),
+    ]
+      .map((row) => row.join(','))
+      .join('\n');
     
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
@@ -462,8 +690,18 @@ export default function AdminPage() {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
+                {(() => {
+                  const dataSource = activeTab === 'search' ? searchResults : attendees;
+                  const totalItems = dataSource.length;
+                  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+                  const safeCurrentPage = Math.min(currentPage, totalPages);
+                  const startIndex = (safeCurrentPage - 1) * pageSize;
+                  const pageItems = dataSource.slice(startIndex, startIndex + pageSize);
+
+                  return (
+                    <>
+                      <table className="w-full">
+                        <thead>
                     <tr className="border-b">
                       <th className="text-left p-3 font-semibold">序號</th>
                       <th className="text-left p-3 font-semibold">姓名</th>
@@ -472,8 +710,8 @@ export default function AdminPage() {
                       <th className="text-left p-3 font-semibold w-40">操作</th>
                     </tr>
                   </thead>
-                  <tbody>
-                    {(activeTab === 'search' ? searchResults : attendees).map((attendee, index) => (
+                        <tbody>
+                          {pageItems.map((attendee, index) => (
                       <tr key={index} className="border-b hover:bg-slate-50">
                         <td className="p-3">{attendee.序號}</td>
                         <td className="p-3">{attendee.姓名}</td>
@@ -503,7 +741,7 @@ export default function AdminPage() {
                                 variant="outline"
                                 size="sm"
                                 className="h-7 px-2 text-xs border-slate-300 text-slate-700 hover:bg-slate-100"
-                                onClick={() => handleRowCancelCheckIn(attendee.序號 || attendee.姓名)}
+                                onClick={() => handleRowCancelCheckIn(attendee)}
                                 disabled={rowActionLoading === (attendee.序號 || attendee.姓名) + '-cancel'}
                               >
                                 取消簽到
@@ -514,7 +752,7 @@ export default function AdminPage() {
                                 variant="outline"
                                 size="sm"
                                 className="h-7 px-2 text-xs border-slate-300 text-slate-700 hover:bg-slate-100"
-                                onClick={() => handleRowCancelCheckIn(attendee.序號 || attendee.姓名)}
+                                onClick={() => handleRowCancelCheckIn(attendee)}
                                 disabled={rowActionLoading === (attendee.序號 || attendee.姓名) + '-cancel'}
                               >
                                 恢復為未簽到
@@ -525,7 +763,7 @@ export default function AdminPage() {
                                 variant="outline"
                                 size="sm"
                                 className="h-7 px-2 text-xs border-amber-300 text-amber-700 hover:bg-amber-50"
-                                onClick={() => handleRowMarkCancelled(attendee.序號 || attendee.姓名)}
+                                onClick={() => handleRowMarkCancelled(attendee)}
                                 disabled={rowActionLoading === (attendee.序號 || attendee.姓名) + '-cancelled'}
                               >
                                 標記為不會來
@@ -535,14 +773,63 @@ export default function AdminPage() {
                         </td>
                       </tr>
                     ))}
-                  </tbody>
-                </table>
-                
-                {(activeTab === 'search' ? searchResults : attendees).length === 0 && (
-                  <div className="text-center py-12 text-slate-500">
-                    {activeTab === 'search' ? '沒有搜尋結果' : '目前沒有資料'}
-                  </div>
-                )}
+                        </tbody>
+                      </table>
+
+                      {totalItems === 0 && (
+                        <div className="text-center py-12 text-slate-500">
+                          {activeTab === 'search' ? '沒有搜尋結果' : '目前沒有資料'}
+                        </div>
+                      )}
+
+                      {totalItems > 0 && (
+                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mt-4 text-xs text-slate-600">
+                          <div className="flex items-center gap-2">
+                            <span>每頁顯示</span>
+                            <select
+                              className="border rounded px-2 py-1 text-xs bg-white"
+                              value={pageSize}
+                              onChange={(e) => {
+                                const size = Number(e.target.value) || 10;
+                                setPageSize(size);
+                                setCurrentPage(1);
+                              }}
+                            >
+                              <option value={10}>10 筆</option>
+                              <option value={20}>20 筆</option>
+                              <option value={30}>30 筆</option>
+                            </select>
+                            <span>
+                              ，共 {totalItems} 筆
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2 justify-end">
+                            <button
+                              type="button"
+                              className="px-2 py-1 border rounded disabled:opacity-50 bg-white"
+                              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                              disabled={safeCurrentPage <= 1}
+                            >
+                              上一頁
+                            </button>
+                            <span>
+                              第 {safeCurrentPage} / {totalPages} 頁
+                            </span>
+                            <button
+                              type="button"
+                              className="px-2 py-1 border rounded disabled:opacity-50 bg-white"
+                              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                              disabled={safeCurrentPage >= totalPages}
+                            >
+                              下一頁
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             )}
           </CardContent>
@@ -631,6 +918,86 @@ export default function AdminPage() {
                     <p>失敗：{loadTestStats.failed}</p>
                     <p>被速率限制擋住（429）：{loadTestStats.limited}</p>
                   </div>
+                )}
+                {loadTestMessage && (
+                  <p className="text-xs text-amber-700 mt-1">{loadTestMessage}</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-sm font-medium">隨機取 N 人實際寫入簽到壓測</p>
+                <div className="flex flex-col md:flex-row gap-2 items-center">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-600">隨機人數（1 ~ 目前載入人數）：</span>
+                    <Input
+                      type="number"
+                      className="w-24 h-8 text-sm"
+                      value={randomWriteCount}
+                      onChange={(e) => setRandomWriteCount(Number(e.target.value) || 0)}
+                      min={1}
+                    />
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={handleRandomWriteTest}
+                    disabled={randomWriteRunning || (activeTab === 'search' ? searchResults.length === 0 : attendees.length === 0) || randomWriteCount <= 0}
+                  >
+                    {randomWriteRunning ? '測試中...' : '開始隨機寫入壓測'}
+                  </Button>
+                </div>
+                <p className="text-xs text-slate-600">
+                  會從目前畫面對應的名單來源（搜尋結果或列表）中，隨機選 N 人實際執行簽到，請務必在測試用 Sheet 上操作。
+                </p>
+                {(randomWriteStats.success + randomWriteStats.failed + randomWriteStats.limited) > 0 && (
+                  <div className="text-xs text-slate-700 space-y-1">
+                    <p>成功：{randomWriteStats.success}</p>
+                    <p>失敗：{randomWriteStats.failed}</p>
+                    <p>被速率限制擋住（429）：{randomWriteStats.limited}</p>
+                  </div>
+                )}
+                {randomWriteMessage && (
+                  <p className="text-xs text-amber-700 mt-1">{randomWriteMessage}</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-sm font-medium">同秒多個不同人併發簽到壓測</p>
+                <div className="flex flex-col md:flex-row gap-2 items-center">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-600">併發人數（1 ~ 未簽到且非 CANCELLED 人數）：</span>
+                    <Input
+                      type="number"
+                      className="w-24 h-8 text-sm"
+                      value={concurrentCount}
+                      onChange={(e) => setConcurrentCount(Number(e.target.value) || 0)}
+                      min={1}
+                    />
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={handleConcurrentTest}
+                    disabled={
+                      concurrentRunning ||
+                      (activeTab === 'search' ? searchResults.length === 0 : attendees.length === 0) ||
+                      concurrentCount <= 0
+                    }
+                  >
+                    {concurrentRunning ? '壓測中...' : '開始同秒併發測試'}
+                  </Button>
+                </div>
+                <p className="text-xs text-slate-600">
+                  會從目前畫面對應的名單來源（搜尋結果或列表）中，隨機選 N 位「尚未簽到且非 CANCELLED」的參加者，
+                  並同時送出簽到請求，用來觀察同一瞬間多列寫入的表現。
+                </p>
+                {(concurrentStats.success + concurrentStats.failed + concurrentStats.limited) > 0 && (
+                  <div className="text-xs text-slate-700 space-y-1">
+                    <p>成功：{concurrentStats.success}</p>
+                    <p>失敗：{concurrentStats.failed}</p>
+                    <p>被速率限制擋住（429）：{concurrentStats.limited}</p>
+                  </div>
+                )}
+                {concurrentMessage && (
+                  <p className="text-xs text-amber-700 mt-1">{concurrentMessage}</p>
                 )}
               </div>
             </CardContent>

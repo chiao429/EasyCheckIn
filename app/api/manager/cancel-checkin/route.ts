@@ -85,6 +85,13 @@ export async function POST(request: NextRequest) {
       const eventId = body?.eventId as string | undefined;
       const operator = body?.operator as string | undefined;
       const attendeeName = body?.attendeeName as string | undefined;
+      const anyError = error as any;
+      const googleErrorMessage =
+        anyError?.response?.data?.error?.message || anyError?.message || undefined;
+      const baseMessage = '取消簽到時發生錯誤';
+      const detailedMessage = googleErrorMessage
+        ? `${baseMessage}（Google: ${googleErrorMessage}）`
+        : baseMessage;
       if (identifier && eventId) {
         await logManagerAction({
           eventId,
@@ -92,8 +99,21 @@ export async function POST(request: NextRequest) {
           identifier,
           attendeeName,
           result: 'FAILED',
-          message: '取消簽到時發生錯誤',
+          message: detailedMessage,
           operator,
+        });
+
+        // 額外寫入一筆系統錯誤紀錄
+        await logManagerAction({
+          eventId,
+          action: 'system_error',
+          identifier: '/api/manager/cancel-checkin',
+          result: 'FAILED',
+          message:
+            'Manager cancel-checkin error: ' +
+            (googleErrorMessage ||
+              (error instanceof Error ? error.message : String(error ?? 'unknown error'))),
+          operator: 'System',
         });
       }
     } catch (logError) {
