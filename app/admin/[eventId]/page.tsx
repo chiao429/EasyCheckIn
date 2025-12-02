@@ -38,7 +38,7 @@ export default function AdminPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Attendee[]>([]);
   const [loading, setLoading] = useState(false);
-  const [stats, setStats] = useState({ total: 0, checked: 0, unchecked: 0 });
+  const [stats, setStats] = useState({ total: 0, checked: 0, cancelled: 0, unchecked: 0 });
   const [testIdentifier, setTestIdentifier] = useState('');
   const [testResult, setTestResult] = useState<string | null>(null);
   const [testLoading, setTestLoading] = useState(false);
@@ -208,10 +208,13 @@ export default function AdminPage() {
 
   const updateStats = (data: Attendee[]) => {
     const checked = data.filter((a) => a.已到 === 'TRUE').length;
+    const cancelled = data.filter((a) => a.已到 === 'CANCELLED').length;
+    const total = data.length;
     setStats({
-      total: data.length,
+      total,
       checked,
-      unchecked: data.length - checked,
+      cancelled,
+      unchecked: total - checked - cancelled,
     });
   };
 
@@ -659,7 +662,7 @@ export default function AdminPage() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">總人數</CardTitle>
@@ -669,7 +672,16 @@ export default function AdminPage() {
               <div className="text-2xl font-bold">{stats.total}</div>
             </CardContent>
           </Card>
-          
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">不會出席</CardTitle>
+              <UserX className="h-4 w-4 text-amber-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-amber-600">{stats.cancelled}</div>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">已簽到</CardTitle>
