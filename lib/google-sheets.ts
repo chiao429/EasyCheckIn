@@ -30,6 +30,11 @@ export interface Attendee {
   已到: string;
 }
 
+export interface DetailField {
+  標題: string;
+  值: string;
+}
+
 // 從活動設定試算表讀取後台密碼（資訊!A2）
 export async function getAdminPasswordFromConfigSheet(): Promise<string | null> {
   const configSheetId = process.env.GOOGLE_EVENT_CONFIG_SHEET_ID;
@@ -196,16 +201,54 @@ export async function initializeSheet(sheetId: string): Promise<void> {
 }
 
 // 搜尋參加者
+export interface AttendeeWithDetails extends Attendee {
+  詳細欄位?: DetailField[];
+}
+
 export async function searchAttendee(
   sheetId: string,
   query: string
-): Promise<Attendee[]> {
-  const allAttendees = await getAllAttendees(sheetId);
+): Promise<AttendeeWithDetails[]> {
+  const sheets = getGoogleSheetsClient();
+
+  // 一次讀取 A1:H，第一列為標題列，其餘為資料列
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: sheetId,
+    range: 'A1:H',
+  });
+
+  const rows = response.data.values || [];
+  const headerRow = rows[0] || [];
+  const dataRows = rows.slice(1);
+
   const trimmed = query.trim();
   const lowerQuery = trimmed.toLowerCase();
 
+  const all: AttendeeWithDetails[] = dataRows.map((row) => {
+    const 序號 = (row[0] || '').toString();
+    const 姓名 = (row[1] || '').toString();
+    const 到達時間 = (row[2] || '').toString();
+    const 已到 = (row[3] || '').toString() || 'FALSE';
+
+    // E~H 欄位 (索引 4~7)
+    const extraHeaders = headerRow.slice(4, 8);
+    const extraValues = row.slice(4, 8).map((v) => (v ?? '').toString());
+    const 詳細欄位: DetailField[] = extraHeaders.map((h, idx) => ({
+      標題: (h || '').toString(),
+      值: extraValues[idx] || '',
+    }));
+
+    return {
+      序號,
+      姓名,
+      到達時間,
+      已到,
+      詳細欄位,
+    };
+  });
+
   // 1. 先用序號做「精準比對」
-  const exactBySerial = allAttendees.filter(
+  const exactBySerial = all.filter(
     (attendee) => attendee.序號.toLowerCase() === lowerQuery
   );
   if (exactBySerial.length > 0) {
@@ -213,7 +256,7 @@ export async function searchAttendee(
   }
 
   // 2. 若找不到序號，再用姓名做「模糊查詢」
-  return allAttendees.filter((attendee) =>
+  return all.filter((attendee) =>
     attendee.姓名.toLowerCase().includes(lowerQuery)
   );
 }

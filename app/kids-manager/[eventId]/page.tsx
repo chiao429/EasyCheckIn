@@ -256,14 +256,14 @@ export default function KidsManagerPage() {
       <div className="max-w-2xl mx-auto space-y-6 flex-1">
         <Card className="shadow-md">
           <CardHeader>
-            <CardTitle className="text-2xl">兒童 Manager（現場同工用工具）</CardTitle>
+            <CardTitle className="text-2xl">兒童 Manager（現場工作人員工具）</CardTitle>
             <CardDescription>
-              給現場同工使用的兒童簽到介面，用來協助快速查詢與簽到。
+              給現場工作人員使用的兒童簽到介面，用來協助快速查詢與簽到。
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium">同工名字</label>
+              <label className="text-sm font-medium">工作人員名稱</label>
               <Input
                 placeholder="例如：兒童組 A、小華..."
                 value={staffName}
@@ -283,7 +283,7 @@ export default function KidsManagerPage() {
                   <label className="text-sm font-medium">搜尋序號或兒童姓名</label>
                   <div className="flex gap-2">
                     <Input
-                      placeholder="輸入序號或姓名，如：K001 或 王小明"
+                      placeholder="請輸入報名序號或姓名"
                       value={keyword}
                       onChange={(e) => setKeyword(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && handleSearch()}

@@ -8,11 +8,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { SiteFooter } from '@/components/SiteFooter';
 import { Search, UserCheck, UserX, Ban } from 'lucide-react';
 
+interface DetailField {
+  標題: string;
+  值: string;
+}
+
 interface Attendee {
   序號: string;
   姓名: string;
   到達時間: string;
   已到: string;
+  詳細欄位?: DetailField[];
 }
 
 export default function ManagerPage() {
@@ -28,6 +34,7 @@ export default function ManagerPage() {
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [showDetails, setShowDetails] = useState(false);
 
   const effectiveSheetId = sheetFromQuery || process.env.GOOGLE_SHEET_ID || eventId;
 
@@ -38,6 +45,27 @@ export default function ManagerPage() {
       setStaffName(saved);
     }
   }, []);
+
+  const renderDetails = (attendee: Attendee | null) => {
+    if (!attendee || !attendee.詳細欄位 || attendee.詳細欄位.length === 0) return null;
+    return (
+      <div className="mt-3 pt-3 border-t text-xs text-slate-700 space-y-1">
+        {attendee.詳細欄位.map((field, idx) => {
+          const hasValue = field.值 && field.值.trim().length > 0;
+          const hasTitle = field.標題 && field.標題.trim().length > 0;
+          if (!hasTitle && !hasValue) return null;
+          return (
+            <p key={idx} className="flex justify-between gap-2">
+              <span className="font-medium text-slate-600">
+                {field.標題 || `欄位 ${idx + 1}`}：
+              </span>
+              <span className="text-slate-800 break-all">{field.值 || '-'}</span>
+            </p>
+          );
+        })}
+      </div>
+    );
+  };
 
   const handleStaffNameChange = (value: string) => {
     setStaffName(value);
@@ -133,6 +161,7 @@ export default function ManagerPage() {
       const data = await response.json();
       if (data.success && data.data && data.data.length > 0) {
         setSelected(data.data[0]);
+        setShowDetails(false);
       }
     } catch (error) {
       console.error('Manager refresh selected error:', error);
@@ -242,7 +271,7 @@ export default function ManagerPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium">同工名字</label>
+              <label className="text-sm font-medium">工作人員名稱</label>
               <Input
                 placeholder="例如：前台 A、小明..."
                 value={staffName}
@@ -258,6 +287,7 @@ export default function ManagerPage() {
 
             {staffName.trim() && (
               <>
+                {/* 搜尋列 */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium">搜尋序號或姓名</label>
                   <div className="flex gap-2">
@@ -274,104 +304,120 @@ export default function ManagerPage() {
                   </div>
                 </div>
 
-            {staffName.trim() && selected && (
-              <div className="mt-4 p-4 rounded-md border bg-white space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">
-                      序號：{selected.序號}｜姓名：{selected.姓名}
-                    </p>
-                    <p className="text-xs text-slate-600 mt-1">
-                      簽到時間：{selected.到達時間 || '尚未簽到'}
-                    </p>
+                {/* 單筆選取詳情 */}
+                {selected && (
+                  <div className="mt-4 p-4 rounded-md border bg-white space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium">
+                          序號：{selected.序號}｜姓名：{selected.姓名}
+                        </p>
+                        <p className="text-xs text-slate-600 mt-1">
+                          簽到時間：{selected.到達時間 || '尚未簽到'}
+                        </p>
+                      </div>
+                      {getStatusLabel(selected)}
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 pt-2 border-t mt-2">
+                      {selected.已到 !== 'TRUE' && selected.已到 !== 'CANCELLED' && (
+                        <Button
+                          variant="default"
+                          size="sm"
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                          onClick={handleManagerCheckIn}
+                          disabled={actionLoading}
+                        >
+                          代為簽到
+                        </Button>
+                      )}
+
+                      {selected.已到 === 'TRUE' && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="border-slate-300 text-slate-700 hover:bg-slate-100"
+                          onClick={handleCancelCheckIn}
+                          disabled={actionLoading}
+                        >
+                          取消簽到（允許重簽）
+                        </Button>
+                      )}
+
+                      {selected.已到 !== 'TRUE' && selected.已到 !== 'CANCELLED' && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="border-amber-300 text-amber-700 hover:bg-amber-50"
+                          onClick={handleMarkCancelled}
+                          disabled={actionLoading}
+                        >
+                          標記為不會來
+                        </Button>
+                      )}
+
+                      {selected.已到 === 'CANCELLED' && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="border-slate-300 text-slate-700 hover:bg-slate-100"
+                          onClick={handleCancelCheckIn}
+                          disabled={actionLoading}
+                        >
+                          恢復為未簽到
+                        </Button>
+                      )}
+
+                      {/* 詳細資訊按鈕 */}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-slate-300 text-slate-700 hover:bg-slate-100"
+                        onClick={() => setShowDetails((prev) => !prev)}
+                      >
+                        {showDetails ? '隱藏詳細資訊' : '顯示詳細資訊'}
+                      </Button>
+                    </div>
+
+                    {/* 詳細資訊：顯示 E~H 欄 */}
+                    {showDetails && renderDetails(selected)}
                   </div>
-                  {getStatusLabel(selected)}
-                </div>
+                )}
 
-                <div className="flex flex-wrap gap-2 pt-2 border-t mt-2">
-                  {selected.已到 !== 'TRUE' && selected.已到 !== 'CANCELLED' && (
-                    <Button
-                      variant="default"
-                      size="sm"
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                      onClick={handleManagerCheckIn}
-                      disabled={actionLoading}
-                    >
-                      代為簽到
-                    </Button>
-                  )}
+                {/* 多筆結果列表 */}
+                {results.length > 1 && (
+                  <div className="space-y-2">
+                    <p className="text-xs text-slate-600">找到多筆結果，請選擇其中一筆：</p>
+                    <div className="border rounded-md divide-y bg-white">
+                      {results.map((attendee, index) => (
+                        <button
+                          key={`${attendee.序號}-${index}`}
+                          type="button"
+                          className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center justify-between ${
+                            selected &&
+                            selected.序號 === attendee.序號 &&
+                            selected.姓名 === attendee.姓名
+                              ? 'bg-slate-100'
+                              : ''
+                          }`}
+                          onClick={() => setSelected(attendee)}
+                        >
+                          <span>
+                            <span className="font-medium mr-2">{attendee.序號}</span>
+                            <span>{attendee.姓名}</span>
+                          </span>
+                          {getStatusLabel(attendee)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-                  {selected.已到 === 'TRUE' && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="border-slate-300 text-slate-700 hover:bg-slate-100"
-                      onClick={handleCancelCheckIn}
-                      disabled={actionLoading}
-                    >
-                      取消簽到（允許重簽）
-                    </Button>
-                  )}
-
-                  {selected.已到 !== 'TRUE' && selected.已到 !== 'CANCELLED' && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="border-amber-300 text-amber-700 hover:bg-amber-50"
-                      onClick={handleMarkCancelled}
-                      disabled={actionLoading}
-                    >
-                      標記為不會來
-                    </Button>
-                  )}
-
-                  {selected.已到 === 'CANCELLED' && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="border-slate-300 text-slate-700 hover:bg-slate-100"
-                      onClick={handleCancelCheckIn}
-                      disabled={actionLoading}
-                    >
-                      恢復為未簽到
-                    </Button>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {staffName.trim() && results.length > 1 && (
-              <div className="space-y-2">
-                <p className="text-xs text-slate-600">找到多筆結果，請選擇其中一筆：</p>
-                <div className="border rounded-md divide-y bg-white">
-                  {results.map((attendee, index) => (
-                    <button
-                      key={`${attendee.序號}-${index}`}
-                      type="button"
-                      className={`w-full text左 px-3 py-2 text-sm hover:bg-slate-50 flex items-center justify-between ${
-                        selected &&
-                        selected.序號 === attendee.序號 &&
-                        selected.姓名 === attendee.姓名
-                          ? 'bg-slate-100'
-                          : ''
-                      }`}
-                      onClick={() => setSelected(attendee)}
-                    >
-                      <span>
-                        <span className="font-medium mr-2">{attendee.序號}</span>
-                        <span>{attendee.姓名}</span>
-                      </span>
-                      {getStatusLabel(attendee)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {message && staffName.trim() && (
-              <p className="text-xs text-slate-700 whitespace-pre-line mt-2">{message}</p>
-            )}
-            </>
+                {/* 訊息提示 */}
+                {message && staffName.trim() && (
+                  <p className="text-xs text-slate-700 whitespace-pre-line mt-2">{message}</p>
+                )}
+              </>
             )}
           </CardContent>
         </Card>

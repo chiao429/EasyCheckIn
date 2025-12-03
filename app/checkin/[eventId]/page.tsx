@@ -71,9 +71,9 @@ export default function CheckInPage() {
           <div className="mx-auto w-16 h-16 bg-primary rounded-full flex items-center justify-center mb-2">
             <UserCheck className="w-8 h-8 text-primary-foreground" />
           </div>
-          <CardTitle className="text-3xl">活動簽到</CardTitle>
+          <CardTitle className="text-3xl">簽到</CardTitle>
           <CardDescription className="text-base">
-            請輸入您的報名序號或姓名進行簽到
+            請輸入您的序號或姓名進行簽到
           </CardDescription>
         </CardHeader>
         
@@ -82,7 +82,7 @@ export default function CheckInPage() {
             <div className="space-y-2">
               <Input
                 type="text"
-                placeholder="報名序號或姓名"
+                placeholder="請輸入序號或姓名"
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
                 disabled={loading}
