@@ -5,6 +5,7 @@ import { useParams, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { SiteFooter } from '@/components/SiteFooter';
 import { Search, UserCheck, UserX, Ban } from 'lucide-react';
 
 interface Attendee {
@@ -230,8 +231,8 @@ export default function ManagerPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 md:p-8">
-      <div className="max-w-2xl mx-auto space-y-6">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 md:p-8 flex flex-col">
+      <div className="max-w-2xl mx-auto space-y-6 flex-1">
         <Card className="shadow-md">
           <CardHeader>
             <CardTitle className="text-2xl">Manager（現場工作人員工具）</CardTitle>
@@ -241,7 +242,7 @@ export default function ManagerPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium">工作人員名稱（僅儲存在本機瀏覽器）</label>
+              <label className="text-sm font-medium">同工名字</label>
               <Input
                 placeholder="例如：前台 A、小明..."
                 value={staffName}
@@ -375,6 +376,7 @@ export default function ManagerPage() {
           </CardContent>
         </Card>
       </div>
+      <SiteFooter />
     </div>
   );
 }

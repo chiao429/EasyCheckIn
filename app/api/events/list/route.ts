@@ -16,7 +16,7 @@ export async function GET(_req: NextRequest) {
 
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: configSheetId,
-      range: 'A2:D',
+      range: 'A2:F',
     });
 
     const rows = response.data.values || [];
@@ -28,6 +28,8 @@ export async function GET(_req: NextRequest) {
         const link = row[1] || '';
         const eventId = row[2] || '';
         const note = row[3] || '';
+        // E 欄目前保留給未來使用，F 欄為版本（同工/兒童）
+        const version = row[5] || '';
         const sheetId = extractSheetIdFromUrl(link);
 
         return {
@@ -35,6 +37,7 @@ export async function GET(_req: NextRequest) {
           name,
           sheetId,
           note,
+          version,
         };
       });
 

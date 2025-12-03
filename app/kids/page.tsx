@@ -18,7 +18,7 @@ interface EventConfig {
   version?: string;
 }
 
-export default function HomePage() {
+export default function KidsHomePage() {
   const pathname = usePathname();
   const [events, setEvents] = useState<EventConfig[]>([]);
   const [selectedEventId, setSelectedEventId] = useState('');
@@ -66,20 +66,19 @@ export default function HomePage() {
     }
 
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || window.location.origin;
-    const url = `${baseUrl}/checkin/${event.eventId}?sheet=${encodeURIComponent(event.sheetId)}`;
-    setCheckinUrl(url);
+    // 兒童版：簽到頁面改為使用 kids-manager 介面，由工作人員代為簽到
+    const managerPageUrl = `${baseUrl}/kids-manager/${event.eventId}?sheet=${encodeURIComponent(event.sheetId)}`;
+    setCheckinUrl(managerPageUrl);
     setAdminUrl(
-      `${baseUrl}/admin/${event.eventId}?sheet=${encodeURIComponent(event.sheetId)}`
+      `${baseUrl}/kids-admin/${event.eventId}?sheet=${encodeURIComponent(event.sheetId)}`
     );
-    setManagerUrl(
-      `${baseUrl}/manager/${event.eventId}?sheet=${encodeURIComponent(event.sheetId)}`
-    );
+    setManagerUrl(managerPageUrl);
     setDashboardUrl(
-      `${baseUrl}/dashboard/${event.eventId}?sheet=${encodeURIComponent(event.sheetId)}`
+      `${baseUrl}/kids-dashboard/${event.eventId}?sheet=${encodeURIComponent(event.sheetId)}`
     );
 
     try {
-      const qrDataUrl = await QRCode.toDataURL(url, {
+      const qrDataUrl = await QRCode.toDataURL(managerPageUrl, {
         width: 300,
         margin: 2,
         color: {
@@ -114,10 +113,8 @@ export default function HomePage() {
     }
   };
 
-  // 同工版首頁：只顯示版本為「同工」或尚未設定版本的活動
-  const filteredEvents = events.filter(
-    (ev: EventConfig) => !ev.version || ev.version === '同工'
-  );
+  // 兒童版首頁：只顯示版本為「兒童」的活動
+  const filteredEvents = events.filter((ev: EventConfig) => ev.version === '兒童');
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-100">
@@ -131,7 +128,7 @@ export default function HomePage() {
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-slate-900">EasyCheck</h1>
-                <p className="text-sm text-slate-600">活動點名系統</p>
+                <p className="text-sm text-slate-600">活動點名系統（兒童版）</p>
               </div>
             </div>
             <div className="flex items-center space-x-3">
@@ -265,7 +262,7 @@ export default function HomePage() {
                     <div className="space-y-3">
                       <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
                         <div className="flex items-center justify-between mb-1">
-                          <p className="text-xs font-medium text-blue-900">簽到頁面</p>
+                          <p className="text-xs font-medium text-blue-900">簽到頁面（工作人員專用）</p>
                           {checkinUrl && (
                             <button
                               type="button"

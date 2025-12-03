@@ -5,6 +5,7 @@ import { useParams, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { SiteFooter } from '@/components/SiteFooter';
 import { 
   Users, 
   UserCheck, 
@@ -604,8 +605,8 @@ export default function AdminPage() {
 
   if (!authenticated) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md shadow-xl">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex flex-col items-center justify-center p-4">
+        <Card className="w-full max-w-md shadow-xl mb-8">
           <CardHeader className="text-center space-y-2">
             <div className="mx-auto w-16 h-16 bg-slate-900 rounded-full flex items-center justify-center mb-2">
               <Lock className="w-8 h-8 text-white" />
@@ -632,13 +633,14 @@ export default function AdminPage() {
             </form>
           </CardContent>
         </Card>
+        <SiteFooter />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 md:p-8">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 md:p-8 flex flex-col">
+      <div className="max-w-7xl mx-auto space-y-6 flex-1">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
@@ -908,176 +910,9 @@ export default function AdminPage() {
             )}
           </CardContent>
         </Card>
-      </div>
-      
-      {/* Test Tools Toggle + Panel (bottom) */}
-      <div className="max-w-7xl mx-auto mt-6 space-y-4">
-        <div className="flex justify-end">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowTools((v) => !v)}
-          >
-            {showTools ? '隱藏後台測試工具' : '顯示後台測試工具'}
-          </Button>
-        </div>
-
-        {showTools && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">後台測試工具（僅工作人員使用）</CardTitle>
-              <CardDescription>
-                用來快速測試簽到流程與 Google Sheets 連線狀況，或小量壓測併發保護機制。
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-2">
-                <p className="text-sm font-medium">單筆簽到測試</p>
-                <div className="flex flex-col md:flex-row gap-2">
-                  <Input
-                    placeholder="輸入要測試的序號或姓名...（會真的簽到）"
-                    value={testIdentifier}
-                    onChange={(e) => setTestIdentifier(e.target.value)}
-                    className="md:max-w-xs"
-                  />
-                  <Button onClick={handleTestCheckIn} disabled={testLoading}>
-                    {testLoading ? '測試中...' : '測試簽到'}
-                  </Button>
-                </div>
-                {testResult && (
-                  <p className="text-xs text-slate-700 mt-1 whitespace-pre-line">{testResult}</p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <p className="text-sm font-medium">Google Sheets 連線檢查</p>
-                <div className="flex flex-col md:flex-row gap-2 items-center">
-                  <Button variant="outline" onClick={handleHealthCheck} disabled={healthLoading}>
-                    {healthLoading ? '檢查中...' : '檢查連線'}
-                  </Button>
-                  {healthStatus && (
-                    <span className="text-xs text-slate-700">{healthStatus}</span>
-                  )}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <p className="text-sm font-medium">簡單小壓測（驗證併發保護）</p>
-                <div className="flex flex-col md:flex-row gap-2 items-center">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-slate-600">請求次數（1-30）：</span>
-                    <Input
-                      type="number"
-                      className="w-24 h-8 text-sm"
-                      value={loadTestCount}
-                      onChange={(e) => setLoadTestCount(Number(e.target.value) || 0)}
-                      min={1}
-                      max={30}
-                    />
-                  </div>
-                  <Button
-                    variant="outline"
-                    onClick={handleLoadTest}
-                    disabled={loadTestRunning || loadTestCount <= 0}
-                  >
-                    {loadTestRunning ? '壓測中...' : '開始小壓測'}
-                  </Button>
-                </div>
-                <p className="text-xs text-slate-600">
-                  壓測會使用識別碼 LOADTEST-1 ~ LOADTEST-N 進行實際簽到，建議在測試專用的 Sheet 上使用。
-                </p>
-                {(loadTestStats.success + loadTestStats.failed + loadTestStats.limited) > 0 && (
-                  <div className="text-xs text-slate-700 space-y-1">
-                    <p>成功：{loadTestStats.success}</p>
-                    <p>失敗：{loadTestStats.failed}</p>
-                    <p>被速率限制擋住（429）：{loadTestStats.limited}</p>
-                  </div>
-                )}
-                {loadTestMessage && (
-                  <p className="text-xs text-amber-700 mt-1">{loadTestMessage}</p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <p className="text-sm font-medium">隨機取 N 人實際寫入簽到壓測</p>
-                <div className="flex flex-col md:flex-row gap-2 items-center">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-slate-600">隨機人數（1 ~ 目前載入人數）：</span>
-                    <Input
-                      type="number"
-                      className="w-24 h-8 text-sm"
-                      value={randomWriteCount}
-                      onChange={(e) => setRandomWriteCount(Number(e.target.value) || 0)}
-                      min={1}
-                    />
-                  </div>
-                  <Button
-                    variant="outline"
-                    onClick={handleRandomWriteTest}
-                    disabled={randomWriteRunning || (activeTab === 'search' ? searchResults.length === 0 : attendees.length === 0) || randomWriteCount <= 0}
-                  >
-                    {randomWriteRunning ? '測試中...' : '開始隨機寫入壓測'}
-                  </Button>
-                </div>
-                <p className="text-xs text-slate-600">
-                  會從目前畫面對應的名單來源（搜尋結果或列表）中，隨機選 N 人實際執行簽到，請務必在測試用 Sheet 上操作。
-                </p>
-                {(randomWriteStats.success + randomWriteStats.failed + randomWriteStats.limited) > 0 && (
-                  <div className="text-xs text-slate-700 space-y-1">
-                    <p>成功：{randomWriteStats.success}</p>
-                    <p>失敗：{randomWriteStats.failed}</p>
-                    <p>被速率限制擋住（429）：{randomWriteStats.limited}</p>
-                  </div>
-                )}
-                {randomWriteMessage && (
-                  <p className="text-xs text-amber-700 mt-1">{randomWriteMessage}</p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <p className="text-sm font-medium">同秒多個不同人併發簽到壓測</p>
-                <div className="flex flex-col md:flex-row gap-2 items-center">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-slate-600">併發人數（1 ~ 未簽到且非 CANCELLED 人數）：</span>
-                    <Input
-                      type="number"
-                      className="w-24 h-8 text-sm"
-                      value={concurrentCount}
-                      onChange={(e) => setConcurrentCount(Number(e.target.value) || 0)}
-                      min={1}
-                    />
-                  </div>
-                  <Button
-                    variant="outline"
-                    onClick={handleConcurrentTest}
-                    disabled={
-                      concurrentRunning ||
-                      (activeTab === 'search' ? searchResults.length === 0 : attendees.length === 0) ||
-                      concurrentCount <= 0
-                    }
-                  >
-                    {concurrentRunning ? '壓測中...' : '開始同秒併發測試'}
-                  </Button>
-                </div>
-                <p className="text-xs text-slate-600">
-                  會從目前畫面對應的名單來源（搜尋結果或列表）中，隨機選 N 位「尚未簽到且非 CANCELLED」的參加者，
-                  並同時送出簽到請求，用來觀察同一瞬間多列寫入的表現。
-                </p>
-                {(concurrentStats.success + concurrentStats.failed + concurrentStats.limited) > 0 && (
-                  <div className="text-xs text-slate-700 space-y-1">
-                    <p>成功：{concurrentStats.success}</p>
-                    <p>失敗：{concurrentStats.failed}</p>
-                    <p>被速率限制擋住（429）：{concurrentStats.limited}</p>
-                  </div>
-                )}
-                {concurrentMessage && (
-                  <p className="text-xs text-amber-700 mt-1">{concurrentMessage}</p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-      </div>
+      )}
     </div>
+    <SiteFooter />
+  </div>
   );
 }

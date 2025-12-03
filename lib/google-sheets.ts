@@ -218,6 +218,203 @@ export async function searchAttendee(
   );
 }
 
+// 兒童版：以不同欄位配置讀取出席名單
+// 實際 Sheet 欄位：
+// A: 已到, B: 到達時間, E: 報名序號, F: 兒童姓名
+// 但在程式內統一轉成 Attendee 介面：
+// 序號(row[0]) = 報名序號(E), 姓名(row[1]) = 兒童姓名(F), 到達時間(row[2]) = B, 已到(row[3]) = A
+export async function getAllKidsAttendees(sheetId: string): Promise<Attendee[]> {
+  const sheets = getGoogleSheetsClient();
+
+  try {
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: sheetId,
+      range: 'A2:F',
+    });
+
+    const rows = response.data.values || [];
+
+    return rows.map((row) => {
+      const 已到 = (row[0] || '').toString();
+      const 到達時間 = (row[1] || '').toString();
+      const 序號 = (row[4] || '').toString();
+      const 姓名 = (row[5] || '').toString();
+
+      return {
+        序號,
+        姓名,
+        到達時間,
+        已到: 已到 || 'FALSE',
+      };
+    });
+  } catch (error) {
+    console.error('Error fetching kids attendees:', error);
+    throw new Error('無法取得兒童出席名單資料');
+  }
+}
+
+export interface KidsDetailField {
+  標題: string;
+  值: string;
+}
+
+export interface KidsAttendeeDetails extends Attendee {
+  詳細欄位?: KidsDetailField[];
+}
+
+export async function searchKidsAttendee(
+  sheetId: string,
+  query: string
+): Promise<KidsAttendeeDetails[]> {
+  const sheets = getGoogleSheetsClient();
+
+  // 兒童名單實際欄位：
+  // A: 已到, B: 到達時間, C: ?(保留), D: 所屬小隊, E: 報名序號, F: 兒童姓名, G~K: 其他欄位
+  // 這裡一次讀取 A1:K，第一列作為標題，第二列以後是資料
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: sheetId,
+    range: 'A1:K',
+  });
+
+  const rows = response.data.values || [];
+  const headerRow = rows[0] || [];
+  const dataRows = rows.slice(1);
+
+  const trimmed = query.trim();
+  const lowerQuery = trimmed.toLowerCase();
+
+  const matchRows: KidsAttendeeDetails[] = [];
+
+  for (const row of dataRows) {
+    const status = (row[0] || '').toString();
+    const time = (row[1] || '').toString();
+    const serial = (row[4] || '').toString();
+    const name = (row[5] || '').toString();
+
+    if (!serial && !name) continue;
+
+    const serialLower = serial.toLowerCase();
+    const nameLower = name.toLowerCase();
+
+    const isMatch =
+      serialLower === lowerQuery ||
+      nameLower.includes(lowerQuery);
+
+    if (!isMatch) continue;
+
+    const extraHeaders = headerRow.slice(3, 10); // D~K
+    const extraValues = row.slice(3, 10).map((v) => (v ?? '').toString());
+    const 詳細欄位: KidsDetailField[] = extraHeaders.map((h, idx) => ({
+      標題: (h || '').toString(),
+      值: extraValues[idx] || '',
+    }));
+
+    matchRows.push({
+      序號: serial,
+      姓名: name,
+      到達時間: time,
+      已到: status || 'FALSE',
+      詳細欄位,
+    });
+  }
+
+  // 若以序號或姓名精準符合的有多筆，全部回傳；否則回傳所有姓名模糊比對的結果
+  return matchRows;
+}
+
+// 兒童版簽到：依照兒童名單欄位配置更新 A:已到, B:到達時間
+export async function checkInKids(
+  sheetId: string,
+  identifier: string
+): Promise<{ success: boolean; message: string; data?: Attendee }> {
+  const sheets = getGoogleSheetsClient();
+
+  try {
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: sheetId,
+      range: 'A2:F',
+    });
+
+    const rows = response.data.values || [];
+
+    let rowIndex = -1;
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const serial = (row[4] || '').toString();
+      const name = (row[5] || '').toString();
+      if (serial === identifier || name === identifier) {
+        rowIndex = i;
+        break;
+      }
+    }
+
+    if (rowIndex === -1) {
+      return {
+        success: false,
+        message: '找不到此序號或姓名，請確認後再試',
+      };
+    }
+
+    const row = rows[rowIndex];
+    const currentStatus = (row[0] || '').toString();
+
+    if (currentStatus === 'TRUE') {
+      const 序號 = (row[4] || '').toString();
+      const 姓名 = (row[5] || '').toString();
+      const 到達時間 = (row[1] || '').toString();
+
+      return {
+        success: false,
+        message: '此序號/姓名已經簽到過了',
+        data: {
+          序號,
+          姓名,
+          到達時間,
+          已到: 'TRUE',
+        },
+      };
+    }
+
+    const now = new Date().toLocaleString('zh-TW', {
+      timeZone: 'Asia/Taipei',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+
+    const actualRowIndex = rowIndex + 2;
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: sheetId,
+      range: `A${actualRowIndex}:B${actualRowIndex}`,
+      valueInputOption: 'RAW',
+      requestBody: {
+        values: [['TRUE', now]],
+      },
+    });
+
+    const updatedRow = rows[rowIndex];
+    const 序號 = (updatedRow[4] || '').toString();
+    const 姓名 = (updatedRow[5] || '').toString();
+
+    return {
+      success: true,
+      message: '簽到成功！',
+      data: {
+        序號,
+        姓名,
+        到達時間: now,
+        已到: 'TRUE',
+      },
+    };
+  } catch (error) {
+    console.error('Error during kids check-in:', error);
+    throw new Error('兒童簽到過程發生錯誤');
+  }
+}
+
 // 紀錄管理員相關操作（例如代為簽到、取消簽到、標記不會來）
 // 以 eventId 為主鍵從活動設定表中找到對應列，依據該列 E 欄的 log sheet 連結寫入紀錄
 export async function logManagerAction(params: {

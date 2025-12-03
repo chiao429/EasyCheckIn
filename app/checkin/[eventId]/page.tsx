@@ -5,6 +5,7 @@ import { useParams, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { SiteFooter } from '@/components/SiteFooter';
 import { CheckCircle2, XCircle, Loader2, UserCheck } from 'lucide-react';
 
 export default function CheckInPage() {
@@ -64,8 +65,8 @@ export default function CheckInPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md shadow-xl">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col items-center justify-center p-4">
+      <Card className="w-full max-w-md shadow-xl mb-8">
         <CardHeader className="text-center space-y-2">
           <div className="mx-auto w-16 h-16 bg-primary rounded-full flex items-center justify-center mb-2">
             <UserCheck className="w-8 h-8 text-primary-foreground" />
@@ -143,6 +144,7 @@ export default function CheckInPage() {
           </div>
         </CardContent>
       </Card>
+      <SiteFooter />
     </div>
   );
 }
