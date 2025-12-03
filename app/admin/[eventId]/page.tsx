@@ -910,7 +910,6 @@ export default function AdminPage() {
             )}
           </CardContent>
         </Card>
-      )}
     </div>
     <SiteFooter />
   </div>
