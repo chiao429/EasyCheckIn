@@ -345,8 +345,8 @@ export async function searchKidsAttendee(
 
     if (!isMatch) continue;
 
-    const extraHeaders = headerRow.slice(3, 10); // D~K
-    const extraValues = row.slice(3, 10).map((v) => (v ?? '').toString());
+    const extraHeaders = headerRow.slice(3, 11); // D~K
+    const extraValues = row.slice(3, 11).map((v) => (v ?? '').toString());
     const 詳細欄位: KidsDetailField[] = extraHeaders.map((h, idx) => ({
       標題: (h || '').toString(),
       值: extraValues[idx] || '',
