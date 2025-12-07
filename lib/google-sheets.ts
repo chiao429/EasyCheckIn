@@ -303,7 +303,18 @@ export interface KidsDetailField {
 
 export interface KidsAttendeeDetails extends Attendee {
   詳細欄位?: KidsDetailField[];
+  rowIndex?: number;
 }
+
+// 簡單的兒童名單快取：以 sheetId 為 key，短時間內重複查詢時共用同一份資料
+interface KidsSheetCacheEntry {
+  headerRow: any[];
+  dataRows: any[][];
+  fetchedAt: number;
+}
+
+const kidsSheetCache = new Map<string, KidsSheetCacheEntry>();
+const KIDS_SHEET_CACHE_TTL_MS = 10_000; // 10 秒快取時間，可視情況調整
 
 export async function searchKidsAttendee(
   sheetId: string,
@@ -314,21 +325,40 @@ export async function searchKidsAttendee(
   // 兒童名單實際欄位：
   // A: 已到, B: 到達時間, C: ?(保留), D: 所屬小隊, E: 報名序號, F: 兒童姓名, G~K: 其他欄位
   // 這裡一次讀取 A1:K，第一列作為標題，第二列以後是資料
-  const response = await sheets.spreadsheets.values.get({
-    spreadsheetId: sheetId,
-    range: 'A1:K',
-  });
 
-  const rows = response.data.values || [];
-  const headerRow = rows[0] || [];
-  const dataRows = rows.slice(1);
+  const now = Date.now();
+  let headerRow: any[] = [];
+  let dataRows: any[][] = [];
+
+  const cached = kidsSheetCache.get(sheetId);
+  if (cached && now - cached.fetchedAt < KIDS_SHEET_CACHE_TTL_MS) {
+    headerRow = cached.headerRow;
+    dataRows = cached.dataRows;
+  } else {
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: sheetId,
+      range: 'A1:K',
+    });
+
+    const rows = response.data.values || [];
+    headerRow = rows[0] || [];
+    dataRows = rows.slice(1);
+
+    kidsSheetCache.set(sheetId, {
+      headerRow,
+      dataRows,
+      fetchedAt: now,
+    });
+  }
 
   const trimmed = query.trim();
   const lowerQuery = trimmed.toLowerCase();
 
-  const matchRows: KidsAttendeeDetails[] = [];
+  const nameMatches: KidsAttendeeDetails[] = [];
+  const extraHeaders = headerRow.slice(3, 11); // D~K
 
-  for (const row of dataRows) {
+  for (let i = 0; i < dataRows.length; i++) {
+    const row = dataRows[i];
     const status = (row[0] || '').toString();
     const time = (row[1] || '').toString();
     const serial = (row[4] || '').toString();
@@ -338,41 +368,102 @@ export async function searchKidsAttendee(
 
     const serialLower = serial.toLowerCase();
     const nameLower = name.toLowerCase();
+    const sheetRowIndex = i + 2;
 
-    const isMatch =
-      serialLower === lowerQuery ||
-      nameLower.includes(lowerQuery);
+    // 1. 若序號與查詢字串精準相同，立刻回傳單筆結果
+    if (serialLower === lowerQuery) {
+      const extraValues = row.slice(3, 11).map((v) => (v ?? '').toString());
+      const 詳細欄位: KidsDetailField[] = extraHeaders.map((h, idx) => ({
+        標題: (h || '').toString(),
+        值: extraValues[idx] || '',
+      }));
+      return [
+        {
+          序號: serial,
+          姓名: name,
+          到達時間: time,
+          已到: status || 'FALSE',
+          詳細欄位,
+          rowIndex: sheetRowIndex,
+        },
+      ];
+    }
 
-    if (!isMatch) continue;
-
-    const extraHeaders = headerRow.slice(3, 11); // D~K
-    const extraValues = row.slice(3, 11).map((v) => (v ?? '').toString());
-    const 詳細欄位: KidsDetailField[] = extraHeaders.map((h, idx) => ({
-      標題: (h || '').toString(),
-      值: extraValues[idx] || '',
-    }));
-
-    matchRows.push({
-      序號: serial,
-      姓名: name,
-      到達時間: time,
-      已到: status || 'FALSE',
-      詳細欄位,
-    });
+    // 2. 否則記錄姓名模糊比對的結果，最後一起回傳
+    if (nameLower.includes(lowerQuery)) {
+      const extraValues = row.slice(3, 11).map((v) => (v ?? '').toString());
+      const 詳細欄位: KidsDetailField[] = extraHeaders.map((h, idx) => ({
+        標題: (h || '').toString(),
+        值: extraValues[idx] || '',
+      }));
+      nameMatches.push({
+        序號: serial,
+        姓名: name,
+        到達時間: time,
+        已到: status || 'FALSE',
+        詳細欄位,
+        rowIndex: sheetRowIndex,
+      });
+    }
   }
 
-  // 若以序號或姓名精準符合的有多筆，全部回傳；否則回傳所有姓名模糊比對的結果
-  return matchRows;
+  // 若沒有序號精準符合，就回傳所有姓名模糊比對的結果
+  return nameMatches;
 }
 
 // 兒童版簽到：依照兒童名單欄位配置更新 A:已到, B:到達時間
 export async function checkInKids(
   sheetId: string,
-  identifier: string
+  identifier: string,
+  rowIndex?: number
 ): Promise<{ success: boolean; message: string; data?: Attendee }> {
   const sheets = getGoogleSheetsClient();
 
   try {
+    if (typeof rowIndex === 'number' && rowIndex >= 2) {
+      const targetRowNumber = rowIndex;
+      const now = new Date().toLocaleString('zh-TW', {
+        timeZone: 'Asia/Taipei',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      });
+
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: sheetId,
+        range: `A${targetRowNumber}:B${targetRowNumber}`,
+        valueInputOption: 'RAW',
+        requestBody: {
+          values: [['TRUE', now]],
+        },
+      });
+
+      const cached = kidsSheetCache.get(sheetId);
+      if (cached) {
+        const cacheRowIndex = targetRowNumber - 2;
+        if (cacheRowIndex >= 0 && cacheRowIndex < cached.dataRows.length) {
+          const cacheRow = cached.dataRows[cacheRowIndex] || [];
+          cacheRow[0] = 'TRUE';
+          cacheRow[1] = now;
+          cached.dataRows[cacheRowIndex] = cacheRow;
+        }
+      }
+
+      return {
+        success: true,
+        message: '簽到成功！',
+        data: {
+          序號: identifier,
+          姓名: identifier,
+          到達時間: now,
+          已到: 'TRUE',
+        },
+      };
+    }
+
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: sheetId,
       range: 'A2:F',
@@ -380,25 +471,25 @@ export async function checkInKids(
 
     const rows = response.data.values || [];
 
-    let rowIndex = -1;
+    let matchedIndex = -1;
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
       const serial = (row[4] || '').toString();
       const name = (row[5] || '').toString();
       if (serial === identifier || name === identifier) {
-        rowIndex = i;
+        matchedIndex = i;
         break;
       }
     }
 
-    if (rowIndex === -1) {
+    if (matchedIndex === -1) {
       return {
         success: false,
         message: '找不到此序號或姓名，請確認後再試',
       };
     }
 
-    const row = rows[rowIndex];
+    const row = rows[matchedIndex];
     const currentStatus = (row[0] || '').toString();
 
     if (currentStatus === 'TRUE') {
@@ -428,7 +519,7 @@ export async function checkInKids(
       second: '2-digit',
     });
 
-    const actualRowIndex = rowIndex + 2;
+    const actualRowIndex = matchedIndex + 2;
     await sheets.spreadsheets.values.update({
       spreadsheetId: sheetId,
       range: `A${actualRowIndex}:B${actualRowIndex}`,
@@ -438,7 +529,7 @@ export async function checkInKids(
       },
     });
 
-    const updatedRow = rows[rowIndex];
+    const updatedRow = rows[matchedIndex];
     const 序號 = (updatedRow[4] || '').toString();
     const 姓名 = (updatedRow[5] || '').toString();
 

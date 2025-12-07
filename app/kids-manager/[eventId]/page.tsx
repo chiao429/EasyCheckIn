@@ -19,6 +19,7 @@ interface Attendee {
   到達時間: string;
   已到: string;
   詳細欄位?: KidsDetailField[];
+  rowIndex?: number;
 }
 
 export default function KidsManagerPage() {
@@ -84,6 +85,7 @@ export default function KidsManagerPage() {
           eventId,
           attendeeName: selected.姓名,
           operator: staffName,
+          rowIndex: selected.rowIndex,
         }),
       });
       const data = await response.json();

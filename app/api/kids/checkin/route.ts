@@ -37,12 +37,13 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { identifier, sheetId, eventId, operator, attendeeName } = body as {
+    const { identifier, sheetId, eventId, operator, attendeeName, rowIndex } = body as {
       identifier?: string;
       sheetId?: string;
       eventId?: string;
       operator?: string;
       attendeeName?: string;
+      rowIndex?: number;
     };
 
     if (!identifier || !sheetId) {
@@ -52,7 +53,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = await checkInKids(sheetId, identifier);
+    const result = await checkInKids(sheetId, identifier, rowIndex);
 
     if (eventId) {
       try {
