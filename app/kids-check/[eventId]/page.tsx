@@ -193,7 +193,9 @@ export default function KidsCheckPage() {
       console.error('Kids check row mark cancelled error:', error);
     } finally {
       setRowActionLoading(null);
-      fetchAttendees(activeTab === 'search' ? 'all' : activeTab);
+      const backendFilter: 'all' | 'checked' | 'unchecked' =
+        activeTab === 'checked' ? 'checked' : activeTab === 'unchecked' ? 'unchecked' : 'all';
+      fetchAttendees(backendFilter);
     }
   };
 
@@ -223,7 +225,9 @@ export default function KidsCheckPage() {
       console.error('Kids check toggle contact error:', error);
     } finally {
       setRowActionLoading(null);
-      fetchAttendees(activeTab === 'search' ? 'all' : activeTab);
+      const backendFilter: 'all' | 'checked' | 'unchecked' =
+        activeTab === 'checked' ? 'checked' : activeTab === 'unchecked' ? 'unchecked' : 'all';
+      fetchAttendees(backendFilter);
     }
   };
 
@@ -266,24 +270,6 @@ export default function KidsCheckPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 md:p-8 flex flex-col">
       <div className="max-w-7xl mx-auto space-y-6 flex-1">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-slate-900">兒童報到管理（現場工作人員）</h1>
-            <p className="text-slate-600 mt-1">活動 ID: {eventId}</p>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={() => fetchAttendees(activeTab === 'search' ? 'all' : activeTab)}
-              disabled={loading}
-            >
-              <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-              重新整理
-            </Button>
-            <Button variant="outline" onClick={exportToCSV}>
-              <Download className="w-4 h-4 mr-2" />
-              匯出 CSV
-            </Button>
           </div>
         </div>
 
@@ -372,13 +358,22 @@ export default function KidsCheckPage() {
                 </label>
               </div>
 
-              <div className="flex flex-wrap gap-2">
+              <div className="flex gap-2">
                 <Button
-                  variant={activeTab === 'search' ? 'default' : 'outline'}
-                  onClick={() => handleTabChange('search')}
+                  variant="outline"
+                  onClick={() => {
+                    const backendFilter: 'all' | 'checked' | 'unchecked' =
+                      activeTab === 'checked'
+                        ? 'checked'
+                        : activeTab === 'unchecked'
+                        ? 'unchecked'
+                        : 'all';
+                    fetchAttendees(backendFilter);
+                  }}
+                  disabled={loading}
                 >
-                  <Search className="w-4 h-4 mr-2" />
-                  搜尋
+                  <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                  重新整理
                 </Button>
               </div>
             </div>
