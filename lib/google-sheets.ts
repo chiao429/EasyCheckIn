@@ -29,6 +29,7 @@ export interface Attendee {
   到達時間: string;
   已到: string;
   聯絡組?: string;
+  需要聯繫?: string;
   詳細欄位?: DetailField[];
 }
 
@@ -297,45 +298,52 @@ export async function searchAttendee(
 
 // 兒童版：以不同欄位配置讀取出席名單
 // 實際 Sheet 欄位：
-// A: 已到, B: 到達時間, C: ?, D~Q: 詳細欄位, E: 報名序號, F: 兒童姓名
+// A: 已到, B: 到達時間, C~T: 其他欄位, U: 是否已聯繫, E: 報名序號, F: 兒童姓名
 // 但在程式內統一轉成 Attendee 介面：
-// 序號 = 報名序號(E), 姓名 = 兒童姓名(F), 到達時間 = B, 已到 = A
+// 序號 = 報名序號(E), 姓名 = 兒童姓名(F), 到達時間 = B, 已到 = A, 需要聯繫 = U
 export async function getAllKidsAttendees(sheetId: string): Promise<Attendee[]> {
   const sheets = getGoogleSheetsClient();
 
   try {
-    // 讀取標題列和資料列，包含 D~Q 欄位
+    // 讀取標題列和資料列，包含到 U 欄
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: sheetId,
-      range: 'A1:Q', // 從第一列開始讀取（包含標題），到 Q 欄
+      range: 'A1:U', // 從第一列開始讀取（包含標題），到 U 欄
     });
 
     const rows = response.data.values || [];
     const headerRow = rows[0] || [];
     const dataRows = rows.slice(1);
 
-    return dataRows.map((row) => {
-      const 已到 = (row[0] || '').toString();
-      const 到達時間 = (row[1] || '').toString();
-      const 序號 = (row[4] || '').toString();
-      const 姓名 = (row[5] || '').toString();
+    return dataRows
+      .map((row) => {
+        const 已到 = (row[0] || '').toString();
+        const 到達時間 = (row[1] || '').toString();
+        const 序號 = (row[4] || '').toString(); // E 欄
+        const 姓名 = (row[5] || '').toString(); // F 欄
+        const 需要聯繫 = (row[20] || '').toString(); // U 欄 (索引 20)
 
-      // D~Q 欄位 (索引 3~16)
-      const extraHeaders = headerRow.slice(3, 17);
-      const extraValues = row.slice(3, 17).map((v) => (v ?? '').toString());
-      const 詳細欄位: DetailField[] = extraHeaders.map((h, idx) => ({
-        標題: (h || '').toString(),
-        值: extraValues[idx] || '',
-      }));
+        // D~T 欄位 (索引 3~19) 作為詳細欄位
+        const extraHeaders = headerRow.slice(3, 20);
+        const extraValues = row.slice(3, 20).map((v) => (v ?? '').toString());
+        const 詳細欄位: DetailField[] = extraHeaders.map((h, idx) => ({
+          標題: (h || '').toString(),
+          值: extraValues[idx] || '',
+        }));
 
-      return {
-        序號,
-        姓名,
-        到達時間,
-        已到: 已到 || 'FALSE',
-        詳細欄位,
-      };
-    });
+        return {
+          序號,
+          姓名,
+          到達時間,
+          已到: 已到 || 'FALSE',
+          需要聯繫,
+          詳細欄位,
+        };
+      })
+      .filter((attendee) => {
+        // 過濾掉姓名和序號都是空白的資料（合併儲存格造成的空白列）
+        return attendee.姓名.trim() !== '' || attendee.序號.trim() !== '';
+      });
   } catch (error) {
     console.error('Error fetching kids attendees:', error);
     throw new Error('無法取得兒童出席名單資料');
@@ -410,7 +418,8 @@ export async function searchKidsAttendee(
     const serial = (row[4] || '').toString();
     const name = (row[5] || '').toString();
 
-    if (!serial && !name) continue;
+    // 跳過姓名和序號都是空白的資料（合併儲存格造成的空白列）
+    if (!serial.trim() && !name.trim()) continue;
 
     const serialLower = serial.toLowerCase();
     const nameLower = name.toLowerCase();
@@ -606,6 +615,8 @@ export async function logManagerAction(params: {
     | 'cancel_checkin_failed'
     | 'mark_cancelled'
     | 'mark_cancelled_failed'
+    | 'toggle_contact'
+    | 'toggle_contact_failed'
     | 'admin_login'
     | 'system_error'
     | 'system_warning';

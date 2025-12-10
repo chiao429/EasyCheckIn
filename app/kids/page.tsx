@@ -66,9 +66,10 @@ export default function KidsHomePage() {
     }
 
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || window.location.origin;
-    // 兒童版：報到頁面改為使用 kids-manager 介面，由工作人員代為報到
+    // 兒童版：報到頁面改為使用 kids-check 介面，由工作人員管理報到
+    const checkPageUrl = `${baseUrl}/kids-check/${event.eventId}?sheet=${encodeURIComponent(event.sheetId)}`;
     const managerPageUrl = `${baseUrl}/kids-manager/${event.eventId}?sheet=${encodeURIComponent(event.sheetId)}`;
-    setCheckinUrl(managerPageUrl);
+    setCheckinUrl(checkPageUrl);
     setAdminUrl(
       `${baseUrl}/kids-admin/${event.eventId}?sheet=${encodeURIComponent(event.sheetId)}`
     );
@@ -78,7 +79,7 @@ export default function KidsHomePage() {
     );
 
     try {
-      const qrDataUrl = await QRCode.toDataURL(managerPageUrl, {
+      const qrDataUrl = await QRCode.toDataURL(checkPageUrl, {
         width: 300,
         margin: 2,
         color: {
@@ -260,28 +261,31 @@ export default function KidsHomePage() {
                     </Button>
 
                     <div className="space-y-3">
-                      <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                      <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-200">
                         <div className="flex items-center justify-between mb-1">
-                          <p className="text-xs font-medium text-blue-900">報到頁面（工作人員專用）</p>
-                          {checkinUrl && (
+                          <p className="text-xs font-medium text-emerald-900">快速報到工具（kids-manager）</p>
+                          {managerUrl && (
                             <button
                               type="button"
-                              onClick={() => handleCopy(checkinUrl)}
-                              className="inline-flex items-center text-[11px] text-blue-700 hover:text-blue-900"
+                              onClick={() => handleCopy(managerUrl)}
+                              className="inline-flex items-center text-[11px] text-emerald-700 hover:text-emerald-900"
                             >
                               <Copy className="w-3 h-3 mr-1" /> 複製
                             </button>
                           )}
                         </div>
                         <a
-                          href={checkinUrl}
+                          href={managerUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-sm text-blue-600 hover:underline flex items-center"
+                          className="text-sm text-emerald-700 hover:underline flex items-center"
                         >
-                          {checkinUrl}
+                          {managerUrl}
                           <ExternalLink className="w-3 h-3 ml-1" />
                         </a>
+                        <p className="text-[11px] text-emerald-700 mt-1">
+                          簡化介面，專注於快速搜尋和代為報到
+                        </p>
                       </div>
 
                       <div className="p-3 bg-purple-50 rounded-lg border border-purple-200">
@@ -306,30 +310,36 @@ export default function KidsHomePage() {
                           {adminUrl}
                           <ExternalLink className="w-3 h-3 ml-1" />
                         </a>
+                        <p className="text-[11px] text-purple-700 mt-1">
+                          包含報到管理功能 + 壓力測試工具
+                        </p>
                       </div>
 
-                      <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-200">
+                      <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
                         <div className="flex items-center justify-between mb-1">
-                          <p className="text-xs font-medium text-emerald-900">Manager 頁面（現場工作人員）</p>
-                          {managerUrl && (
+                          <p className="text-xs font-medium text-blue-900">報到管理頁面（現場工作人員專用）</p>
+                          {checkinUrl && (
                             <button
                               type="button"
-                              onClick={() => handleCopy(managerUrl)}
-                              className="inline-flex items-center text-[11px] text-emerald-700 hover:text-emerald-900"
+                              onClick={() => handleCopy(checkinUrl)}
+                              className="inline-flex items-center text-[11px] text-blue-700 hover:text-blue-900"
                             >
                               <Copy className="w-3 h-3 mr-1" /> 複製
                             </button>
                           )}
                         </div>
                         <a
-                          href={managerUrl}
+                          href={checkinUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-sm text-emerald-700 hover:underline flex items-center"
+                          className="text-sm text-blue-600 hover:underline flex items-center"
                         >
-                          {managerUrl}
+                          {checkinUrl}
                           <ExternalLink className="w-3 h-3 ml-1" />
                         </a>
+                        <p className="text-[11px] text-blue-700 mt-1">
+                          可查看名單、搜尋、取消報到、標記不會出席等功能
+                        </p>
                       </div>
 
                       <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
