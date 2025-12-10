@@ -160,8 +160,20 @@ export default function ManagerPage() {
       );
       const data = await response.json();
       if (data.success && data.data && data.data.length > 0) {
-        setSelected(data.data[0]);
+        const updatedAttendee = data.data[0];
+        setSelected(updatedAttendee);
         setShowDetails(false);
+        
+        // 同步更新 results 列表中的對應項目
+        if (results.length > 0) {
+          setResults((prevResults) =>
+            prevResults.map((item) =>
+              item.序號 === updatedAttendee.序號 && item.姓名 === updatedAttendee.姓名
+                ? updatedAttendee
+                : item
+            )
+          );
+        }
       }
     } catch (error) {
       console.error('Manager refresh selected error:', error);
@@ -301,6 +313,10 @@ export default function ManagerPage() {
                       <Search className="w-4 h-4 mr-1" />
                       {loading ? '搜尋中...' : '搜尋'}
                     </Button>
+                  </div>
+                  <div className="text-xs text-slate-600 space-y-0.5 pl-1">
+                    <p>• 序號請輸入完整序號</p>
+                    <p>• 姓名支援輸入關鍵字查詢</p>
                   </div>
                 </div>
 

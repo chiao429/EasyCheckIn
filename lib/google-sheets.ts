@@ -28,6 +28,8 @@ export interface Attendee {
   姓名: string;
   到達時間: string;
   已到: string;
+  聯絡組?: string;
+  詳細欄位?: DetailField[];
 }
 
 export interface DetailField {
@@ -70,18 +72,50 @@ export async function getAllAttendees(sheetId: string): Promise<Attendee[]> {
   const sheets = getGoogleSheetsClient();
   
   try {
+    // 讀取標題列和資料列
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: sheetId,
-      range: 'A2:D', // 從第二列開始讀取（跳過標題）
+      range: 'A1:I', // 從第一列開始讀取（包含標題），包含 I 欄聯絡組
     });
 
     const rows = response.data.values || [];
-    return rows.map((row) => ({
-      序號: row[0] || '',
-      姓名: row[1] || '',
-      到達時間: row[2] || '',
-      已到: row[3] || 'FALSE',
-    }));
+    const headerRow = rows[0] || [];
+    const dataRows = rows.slice(1);
+    
+    // 除錯：檢查前幾筆資料
+    if (dataRows.length > 0) {
+      console.log('Google Sheets 原始資料（前3筆）:', dataRows.slice(0, 3).map((row, idx) => ({
+        列號: idx + 2,
+        row長度: row.length,
+        序號: row[0],
+        姓名: row[1],
+        已到: row[3],
+        '性別_E': row[4],
+        '所屬小組_F': row[5],
+        '聯絡電話_G': row[6],
+        'LineID_H': row[7],
+        '聯絡組_I': row[8],
+      })));
+    }
+    
+    return dataRows.map((row) => {
+      // E~I 欄位 (索引 4~8)
+      const extraHeaders = headerRow.slice(4, 9);
+      const extraValues = row.slice(4, 9).map((v) => (v ?? '').toString());
+      const 詳細欄位: DetailField[] = extraHeaders.map((h, idx) => ({
+        標題: (h || '').toString(),
+        值: extraValues[idx] || '',
+      }));
+
+      return {
+        序號: row[0] || '',
+        姓名: row[1] || '',
+        到達時間: row[2] || '',
+        已到: row[3] || 'FALSE',
+        聯絡組: (row[8] || '').toString().trim(), // I 欄是索引 8，確保轉字串並去除空白
+        詳細欄位,
+      };
+    });
   } catch (error) {
     console.error('Error fetching attendees:', error);
     throw new Error('無法取得參加者資料');
@@ -263,31 +297,43 @@ export async function searchAttendee(
 
 // 兒童版：以不同欄位配置讀取出席名單
 // 實際 Sheet 欄位：
-// A: 已到, B: 到達時間, E: 報名序號, F: 兒童姓名
+// A: 已到, B: 到達時間, C: ?, D~Q: 詳細欄位, E: 報名序號, F: 兒童姓名
 // 但在程式內統一轉成 Attendee 介面：
-// 序號(row[0]) = 報名序號(E), 姓名(row[1]) = 兒童姓名(F), 到達時間(row[2]) = B, 已到(row[3]) = A
+// 序號 = 報名序號(E), 姓名 = 兒童姓名(F), 到達時間 = B, 已到 = A
 export async function getAllKidsAttendees(sheetId: string): Promise<Attendee[]> {
   const sheets = getGoogleSheetsClient();
 
   try {
+    // 讀取標題列和資料列，包含 D~Q 欄位
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: sheetId,
-      range: 'A2:F',
+      range: 'A1:Q', // 從第一列開始讀取（包含標題），到 Q 欄
     });
 
     const rows = response.data.values || [];
+    const headerRow = rows[0] || [];
+    const dataRows = rows.slice(1);
 
-    return rows.map((row) => {
+    return dataRows.map((row) => {
       const 已到 = (row[0] || '').toString();
       const 到達時間 = (row[1] || '').toString();
       const 序號 = (row[4] || '').toString();
       const 姓名 = (row[5] || '').toString();
+
+      // D~Q 欄位 (索引 3~16)
+      const extraHeaders = headerRow.slice(3, 17);
+      const extraValues = row.slice(3, 17).map((v) => (v ?? '').toString());
+      const 詳細欄位: DetailField[] = extraHeaders.map((h, idx) => ({
+        標題: (h || '').toString(),
+        值: extraValues[idx] || '',
+      }));
 
       return {
         序號,
         姓名,
         到達時間,
         已到: 已到 || 'FALSE',
+        詳細欄位,
       };
     });
   } catch (error) {

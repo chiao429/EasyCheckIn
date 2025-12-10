@@ -5,13 +5,20 @@ import { useParams, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { SiteFooter } from '@/components/SiteFooter';
-import { Users, UserCheck, UserX, Ban, RefreshCw } from 'lucide-react';
+import { Users, UserCheck, UserX, Ban, RefreshCw, ArrowUp } from 'lucide-react';
+
+interface DetailField {
+  標題: string;
+  值: string;
+}
 
 interface Attendee {
   序號: string;
   姓名: string;
   到達時間: string;
   已到: string;
+  聯絡組?: string;
+  詳細欄位?: DetailField[];
 }
 
 export default function DashboardPage() {
@@ -34,7 +41,15 @@ export default function DashboardPage() {
   const [hydrated, setHydrated] = useState(false);
   // 名單區塊模糊查詢關鍵字（依姓名）
   const [searchQuery, setSearchQuery] = useState('');
+  // 組別篩選
+  const [selectedGroup, setSelectedGroup] = useState<string>('all');
+  // 每頁顯示筆數
+  const [pageSize, setPageSize] = useState<number>(5);
   const [currentPage, setCurrentPage] = useState(1);
+  // 控制「回到頂部」按鈕的顯示
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  // 追蹤展開詳細資料的項目（使用序號+姓名作為唯一識別）
+  const [expandedItem, setExpandedItem] = useState<string | null>(null);
 
   const effectiveSheetId = sheetFromQuery || process.env.GOOGLE_SHEET_ID || eventId;
 
@@ -110,6 +125,16 @@ export default function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveSheetId]);
 
+  // 監聽滾動事件，控制「回到頂部」按鈕的顯示
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowScrollTop(window.scrollY > 300);
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
   // 將名單區塊展開 / 收合狀態存到瀏覽器
   useEffect(() => {
     if (!hydrated) return; // 還沒還原前不要覆蓋 localStorage
@@ -143,6 +168,54 @@ export default function DashboardPage() {
   const effectiveTotalForRate = total - cancelled;
   const rate = effectiveTotalForRate > 0 ? (checked / effectiveTotalForRate) * 100 : 0;
 
+  // 計算聯絡組比例（包含已出席和未出席）
+  const contactGroupStatsChecked = attendees
+    .filter((a) => a.已到 === 'TRUE') // 已簽到的人
+    .reduce((acc, attendee) => {
+      const group = (attendee.聯絡組 && attendee.聯絡組.trim()) || '未分組';
+      if (!acc[group]) {
+        acc[group] = 0;
+      }
+      acc[group]++;
+      return acc;
+    }, {} as Record<string, number>);
+
+  const contactGroupStatsUnchecked = attendees
+    .filter((a) => a.已到 !== 'TRUE' && a.已到 !== 'CANCELLED') // 未簽到的人（排除不會來）
+    .reduce((acc, attendee) => {
+      const group = (attendee.聯絡組 && attendee.聯絡組.trim()) || '未分組';
+      if (!acc[group]) {
+        acc[group] = 0;
+      }
+      acc[group]++;
+      return acc;
+    }, {} as Record<string, number>);
+
+  // 除錯：檢查前幾筆資料的聯絡組欄位
+  if (attendees.length > 0) {
+    console.log('前3筆參加者資料:', attendees.slice(0, 3).map(a => ({
+      姓名: a.姓名,
+      聯絡組: a.聯絡組,
+      聯絡組長度: a.聯絡組?.length
+    })));
+  }
+
+  // 合併所有聯絡組（已簽到 + 未簽到）
+  const allGroups = new Set([
+    ...Object.keys(contactGroupStatsChecked),
+    ...Object.keys(contactGroupStatsUnchecked),
+  ]);
+
+  const contactGroupArray = Array.from(allGroups)
+    .map((group) => ({
+      group,
+      checkedCount: contactGroupStatsChecked[group] || 0,
+      uncheckedCount: contactGroupStatsUnchecked[group] || 0,
+      totalCount: (contactGroupStatsChecked[group] || 0) + (contactGroupStatsUnchecked[group] || 0),
+      percentage: checked > 0 ? ((contactGroupStatsChecked[group] || 0) / checked) * 100 : 0,
+    }))
+    .sort((a, b) => b.checkedCount - a.checkedCount);
+
   const checkedList = attendees.filter((a) => a.已到 === 'TRUE');
   const cancelledList = attendees.filter((a) => a.已到 === 'CANCELLED');
   const uncheckedList = attendees.filter((a) => a.已到 !== 'TRUE' && a.已到 !== 'CANCELLED');
@@ -161,20 +234,41 @@ export default function DashboardPage() {
     }
   };
 
-  const PAGE_SIZE = 5;
   const rawDetailList = getDetailList();
 
-  // 依搜尋關鍵字過濾名單（目前僅針對姓名做包含查詢）
-  const detailList =
-    searchQuery.trim().length === 0
-      ? rawDetailList
-      : rawDetailList.filter((a) =>
-          a.姓名.toLowerCase().includes(searchQuery.trim().toLowerCase())
-        );
-  const totalPages = Math.max(1, Math.ceil(detailList.length / PAGE_SIZE));
+  // 獲取所有可用的聯絡組列表（用於下拉選單）
+  const availableGroups = Array.from(
+    new Set(
+      rawDetailList
+        .map((a) => (a.聯絡組 && a.聯絡組.trim()) || '未分組')
+        .filter(Boolean)
+    )
+  ).sort();
+
+  // 依搜尋關鍵字和組別過濾名單
+  let detailList = rawDetailList;
+  
+  // 先依姓名搜尋過濾
+  if (searchQuery.trim().length > 0) {
+    detailList = detailList.filter((a) =>
+      a.姓名.toLowerCase().includes(searchQuery.trim().toLowerCase())
+    );
+  }
+  
+  // 再依組別過濾
+  if (selectedGroup !== 'all') {
+    detailList = detailList.filter((a) => {
+      const group = (a.聯絡組 && a.聯絡組.trim()) || '未分組';
+      return group === selectedGroup;
+    });
+  }
+
+  // 計算分頁（pageSize 為 0 表示全部顯示）
+  const effectivePageSize = pageSize === 0 ? detailList.length : pageSize;
+  const totalPages = Math.max(1, Math.ceil(detailList.length / effectivePageSize));
   const safePage = Math.min(currentPage, totalPages);
-  const startIndex = (safePage - 1) * PAGE_SIZE;
-  const pagedList = detailList.slice(startIndex, startIndex + PAGE_SIZE);
+  const startIndex = (safePage - 1) * effectivePageSize;
+  const pagedList = detailList.slice(startIndex, startIndex + effectivePageSize);
 
   const handleChangeListMode = (mode: 'all' | 'checked' | 'cancelled' | 'unchecked') => {
     setListMode(mode);
@@ -250,7 +344,10 @@ export default function DashboardPage() {
             }}
           >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-base md:text-lg font-medium text-white">應出席人數</CardTitle>
+              <div className="flex flex-col gap-1">
+                <div className="text-xs text-slate-400">總人數：{total}</div>
+                <CardTitle className="text-base md:text-lg font-medium text-white">應出席人數</CardTitle>
+              </div>
               <Users className="h-4 w-4 text-slate-300" />
             </CardHeader>
             <CardContent>
@@ -352,8 +449,8 @@ export default function DashboardPage() {
                 {listMode === 'unchecked' && '尚未簽到名單'}
                 {listMode === 'cancelled' && '不會出席名單'}
               </CardTitle>
-              <div className="mt-2 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                <div className="flex w-full md:w-auto items-center gap-2">
+              <div className="mt-2 flex flex-col gap-3">
+                <div className="flex flex-col md:flex-row w-full items-stretch md:items-center gap-2">
                   <input
                     type="text"
                     value={searchQuery}
@@ -362,22 +459,58 @@ export default function DashboardPage() {
                       setCurrentPage(1);
                     }}
                     placeholder="輸入姓名關鍵字進行搜尋"
-                    className="w-full md:w-72 rounded-md border border-slate-600 bg-slate-900 px-3 py-1.5 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                    className="flex-1 md:w-72 rounded-md border border-slate-600 bg-slate-900 px-3 py-1.5 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                   />
                   <button
                     type="button"
                     onClick={() => {
                       setSearchQuery('');
+                      setSelectedGroup('all');
                       setCurrentPage(1);
                     }}
-                    disabled={searchQuery.trim().length === 0}
-                    className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-colors
-                      ${searchQuery.trim().length === 0
+                    disabled={searchQuery.trim().length === 0 && selectedGroup === 'all'}
+                    className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-colors whitespace-nowrap
+                      ${searchQuery.trim().length === 0 && selectedGroup === 'all'
                         ? 'border-slate-700 text-slate-500 bg-slate-800 cursor-not-allowed'
                         : 'border-slate-500 text-slate-100 bg-slate-800 hover:bg-slate-700'}`}
                   >
-                    清除
+                    清除篩選
                   </button>
+                </div>
+                
+                {/* 聯絡組別 Radio Buttons */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs text-slate-400 mr-1">聯絡組別：</span>
+                  <label className="inline-flex items-center cursor-pointer">
+                    <input
+                      type="radio"
+                      name="contactGroup"
+                      value="all"
+                      checked={selectedGroup === 'all'}
+                      onChange={(e) => {
+                        setSelectedGroup(e.target.value);
+                        setCurrentPage(1);
+                      }}
+                      className="w-3 h-3 text-emerald-500 bg-slate-900 border-slate-600 focus:ring-emerald-500 focus:ring-2"
+                    />
+                    <span className="ml-1.5 text-xs text-slate-200">全部</span>
+                  </label>
+                  {availableGroups.map((group) => (
+                    <label key={group} className="inline-flex items-center cursor-pointer">
+                      <input
+                        type="radio"
+                        name="contactGroup"
+                        value={group}
+                        checked={selectedGroup === group}
+                        onChange={(e) => {
+                          setSelectedGroup(e.target.value);
+                          setCurrentPage(1);
+                        }}
+                        className="w-3 h-3 text-emerald-500 bg-slate-900 border-slate-600 focus:ring-emerald-500 focus:ring-2"
+                      />
+                      <span className="ml-1.5 text-xs text-slate-200">{group}</span>
+                    </label>
+                  ))}
                 </div>
               <p
                 className={`text-xs 
@@ -401,49 +534,102 @@ export default function DashboardPage() {
             ) : (
               <>
                 <div className="space-y-2">
-                  {pagedList.map((a, idx) => (
-                    <div
-                      key={`${a.序號}-${a.姓名}-${idx}`}
-                      className="flex items-center justify-between py-2 px-3 text-sm bg-slate-800 rounded-md border border-slate-700"
-                    >
-                      <div>
-                        <p className="font-medium text-slate-100">
-                          <span className="mr-2 text-slate-400">{a.序號}</span>
-                          {a.姓名}
-                        </p>
-                        <p className="text-[11px] text-slate-400 mt-0.5">
-                          {a.到達時間 || '-'}
-                        </p>
+                  {pagedList.map((a, idx) => {
+                    const itemKey = `${a.序號}-${a.姓名}`;
+                    const isExpanded = expandedItem === itemKey;
+                    
+                    return (
+                      <div
+                        key={`${itemKey}-${idx}`}
+                        className="bg-slate-800 rounded-md border border-slate-700 overflow-hidden"
+                      >
+                        <div
+                          className="flex items-center justify-between py-2 px-3 text-sm cursor-pointer hover:bg-slate-750 transition-colors"
+                          onClick={() => setExpandedItem(isExpanded ? null : itemKey)}
+                        >
+                          <div>
+                            <p className="font-medium text-slate-100">
+                              <span className="mr-2 text-slate-400">{a.序號}</span>
+                              {a.姓名}
+                            </p>
+                            <p className="text-[11px] text-slate-400 mt-0.5">
+                              {a.到達時間 || '-'}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {listMode === 'checked' && (
+                              <span className="text-[11px] text-emerald-300">已簽到</span>
+                            )}
+                            {listMode === 'unchecked' && (
+                              <span className="text-[11px] text-slate-400">未簽到</span>
+                            )}
+                            {listMode === 'cancelled' && (
+                              <span className="text-[11px] text-amber-300">不會出席</span>
+                            )}
+                            {listMode === 'all' && (
+                              <span className="text-[11px] font-semibold">
+                                {a.已到 === 'TRUE' && (
+                                  <span className="text-emerald-300">已簽到</span>
+                                )}
+                                {a.已到 === 'CANCELLED' && (
+                                  <span className="text-amber-300">不會出席</span>
+                                )}
+                                {a.已到 !== 'TRUE' && a.已到 !== 'CANCELLED' && (
+                                  <span className="text-slate-300">未簽到</span>
+                                )}
+                              </span>
+                            )}
+                            <span className="text-slate-400 text-xs">
+                              {isExpanded ? '▲' : '▼'}
+                            </span>
+                          </div>
+                        </div>
+                        
+                        {/* 展開的詳細資料 */}
+                        {isExpanded && a.詳細欄位 && a.詳細欄位.length > 0 && (
+                          <div className="px-3 py-2 border-t border-slate-700 bg-slate-850">
+                            <div className="space-y-1 text-xs">
+                              {a.詳細欄位.map((field, fieldIdx) => {
+                                const hasValue = field.值 && field.值.trim().length > 0;
+                                const hasTitle = field.標題 && field.標題.trim().length > 0;
+                                if (!hasTitle && !hasValue) return null;
+                                
+                                return (
+                                  <div key={fieldIdx} className="flex justify-between gap-2">
+                                    <span className="text-slate-400">
+                                      {field.標題 || `欄位 ${fieldIdx + 1}`}：
+                                    </span>
+                                    <span className="text-slate-200 break-all">
+                                      {field.值 || '-'}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
                       </div>
-                      {listMode === 'checked' && (
-                        <span className="text-[11px] text-emerald-300">已簽到</span>
-                      )}
-                      {listMode === 'unchecked' && (
-                        <span className="text-[11px] text-slate-400">未簽到</span>
-                      )}
-                      {listMode === 'cancelled' && (
-                        <span className="text-[11px] text-amber-300">不會出席</span>
-                      )}
-                      {listMode === 'all' && (
-                        <span className="text-[11px] font-semibold">
-                          {a.已到 === 'TRUE' && (
-                            <span className="text-emerald-300">已簽到</span>
-                          )}
-                          {a.已到 === 'CANCELLED' && (
-                            <span className="text-amber-300">不會出席</span>
-                          )}
-                          {a.已到 !== 'TRUE' && a.已到 !== 'CANCELLED' && (
-                            <span className="text-slate-300">未簽到</span>
-                          )}
-                        </span>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-3 text-[11px] text-slate-300">
-                  <span>
-                    第 {safePage} / {totalPages} 頁（每頁 {PAGE_SIZE} 筆，共 {detailList.length} 筆）
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={pageSize}
+                      onChange={(e) => {
+                        setPageSize(Number(e.target.value));
+                        setCurrentPage(1);
+                      }}
+                      className="rounded border border-slate-600 bg-slate-900 px-2 py-0.5 text-[11px] text-slate-200 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    >
+                      <option value={5}>5</option>
+                      <option value={10}>10</option>
+                      <option value={0}>全部</option>
+                    </select>
+                    <span>
+                      第 {safePage} / {totalPages} 頁（每頁 {pageSize === 0 ? '全部' : pageSize} 筆，共 {detailList.length} 筆）
+                    </span>
+                  </div>
                   <div className="flex items-center gap-2">
                     <Button
                       variant="outline"
@@ -640,8 +826,63 @@ export default function DashboardPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* 聯絡組比例區塊 */}
+        <Card className="bg-slate-900/60 border border-slate-700 shadow-2xl mb-4">
+          <CardHeader>
+            <CardTitle className="text-base font-semibold text-white tracking-wide flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+              聯絡組比例分布
+            </CardTitle>
+            <p className="text-xs text-slate-400">顯示各聯絡組的已出席與未出席人數分布</p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {contactGroupArray.length === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-4">目前無聯絡組資料</p>
+            ) : (
+              <div className="space-y-3">
+                {contactGroupArray.map((item, idx) => (
+                  <div key={idx} className="space-y-1">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-slate-200 font-medium">{item.group}</span>
+                      <div className="text-slate-300 text-xs">
+                        <span className="text-emerald-300 font-semibold">{item.checkedCount}</span> 已到 / 
+                        <span className="text-red-300 font-semibold ml-1">{item.uncheckedCount}</span> 未到
+                        <span className="text-slate-400 ml-2">({item.percentage.toFixed(1)}%)</span>
+                      </div>
+                    </div>
+                    <div className="w-full bg-slate-700 rounded-full h-2.5 overflow-hidden">
+                      <div
+                        className="bg-gradient-to-r from-emerald-500 to-emerald-400 h-2.5 rounded-full transition-all duration-500"
+                        style={{ width: `${item.percentage}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="pt-3 border-t border-slate-700">
+              <p className="text-xs text-slate-300">
+                共有 <span className="font-semibold text-blue-300">{contactGroupArray.length}</span> 個聯絡組，
+                總計 <span className="font-semibold text-emerald-300">{checked}</span> 人已簽到、
+                <span className="font-semibold text-red-300">{unchecked}</span> 人未簽到
+              </p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
       <SiteFooter />
+
+      {/* 回到頂部浮動按鈕 */}
+      {showScrollTop && (
+        <button
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          className="fixed bottom-8 right-8 z-50 p-3 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg transition-all duration-300 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+          aria-label="回到頂部"
+        >
+          <ArrowUp className="w-5 h-5" />
+        </button>
+      )}
     </div>
   );
 }

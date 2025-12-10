@@ -66,7 +66,7 @@ export default function KidsHomePage() {
     }
 
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || window.location.origin;
-    // 兒童版：簽到頁面改為使用 kids-manager 介面，由工作人員代為簽到
+    // 兒童版：報到頁面改為使用 kids-manager 介面，由工作人員代為報到
     const managerPageUrl = `${baseUrl}/kids-manager/${event.eventId}?sheet=${encodeURIComponent(event.sheetId)}`;
     setCheckinUrl(managerPageUrl);
     setAdminUrl(
@@ -196,7 +196,7 @@ export default function KidsHomePage() {
               <CardHeader>
                 <CardTitle className="text-2xl">產生活動 QR Code</CardTitle>
                 <CardDescription>
-                  從活動設定中選擇一個活動，產生該活動的簽到相關 QR Code 與連結
+                  從活動設定中選擇一個活動，產生該活動的報到相關 QR Code 與連結
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -262,7 +262,7 @@ export default function KidsHomePage() {
                     <div className="space-y-3">
                       <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
                         <div className="flex items-center justify-between mb-1">
-                          <p className="text-xs font-medium text-blue-900">簽到頁面（工作人員專用）</p>
+                          <p className="text-xs font-medium text-blue-900">報到頁面（工作人員專用）</p>
                           {checkinUrl && (
                             <button
                               type="button"
@@ -395,8 +395,8 @@ export default function KidsHomePage() {
                   </h3>
                   <div className="ml-10 space-y-2 text-sm text-slate-600">
                     <p>• 在左側從下拉選單中選擇一個已設定好的活動</p>
-                    <p>• 點擊「產生 QR Code」產生簽到頁、後台、Manager、儀表板的連結</p>
-                    <p>• 下載並列印簽到用 QR Code，其他連結提供工作人員與主持人使用</p>
+                    <p>• 點擊「產生 QR Code」產生報到頁、後台、Manager、儀表板的連結</p>
+                    <p>• 下載並列印報到用 QR Code，其他連結提供工作人員與主持人使用</p>
                   </div>
                 </div>
 
@@ -408,9 +408,9 @@ export default function KidsHomePage() {
                     活動當天
                   </h3>
                   <div className="ml-10 space-y-2 text-sm text-slate-600">
-                    <p>• 參加者掃描 QR Code 進入簽到頁面</p>
+                    <p>• 參加者掃描 QR Code 進入報到頁面</p>
                     <p>• 輸入報名序號或姓名</p>
-                    <p>• 系統自動記錄簽到時間</p>
+                    <p>• 系統自動記錄報到時間</p>
                     <p>• 工作人員可透過管理後台即時查看</p>
                   </div>
                 </div>
@@ -432,15 +432,15 @@ export default function KidsHomePage() {
                   </li>
                   <li className="flex items-start">
                     <span className="text-blue-600 mr-2">✓</span>
-                    <span>自動記錄簽到時間</span>
+                    <span>自動記錄報到時間</span>
                   </li>
                   <li className="flex items-start">
                     <span className="text-blue-600 mr-2">✓</span>
-                    <span>即時查看簽到狀況</span>
+                    <span>即時查看報到狀況</span>
                   </li>
                   <li className="flex items-start">
                     <span className="text-blue-600 mr-2">✓</span>
-                    <span>支援序號或姓名簽到</span>
+                    <span>支援序號或姓名報到</span>
                   </li>
                   <li className="flex items-start">
                     <span className="text-blue-600 mr-2">✓</span>

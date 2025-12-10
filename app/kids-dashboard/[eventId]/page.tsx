@@ -7,11 +7,17 @@ import { Button } from '@/components/ui/button';
 import { SiteFooter } from '@/components/SiteFooter';
 import { Users, UserCheck, UserX, Ban, RefreshCw } from 'lucide-react';
 
+interface DetailField {
+  標題: string;
+  值: string;
+}
+
 interface Attendee {
   序號: string;
   姓名: string;
   到達時間: string;
   已到: string;
+  詳細欄位?: DetailField[];
 }
 
 export default function KidsDashboardPage() {
@@ -31,6 +37,8 @@ export default function KidsDashboardPage() {
   const [hydrated, setHydrated] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  // 追蹤展開詳細資料的項目（使用序號+姓名作為唯一識別）
+  const [expandedItem, setExpandedItem] = useState<string | null>(null);
 
   const effectiveSheetId = sheetFromQuery || process.env.GOOGLE_SHEET_ID || eventId;
 
@@ -249,9 +257,12 @@ export default function KidsDashboardPage() {
             }}
           >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-base md:text-lg font-medium text-white">
-                兒童應出席人數
-              </CardTitle>
+              <div className="flex flex-col gap-1">
+                <div className="text-xs text-slate-400">總人數：{total}</div>
+                <CardTitle className="text-base md:text-lg font-medium text-white">
+                  兒童應出席人數
+                </CardTitle>
+              </div>
               <Users className="h-4 w-4 text-slate-300" />
             </CardHeader>
             <CardContent>
@@ -274,7 +285,7 @@ export default function KidsDashboardPage() {
             }}
           >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-base md:text-lg font-medium text白">已簽到</CardTitle>
+              <CardTitle className="text-base md:text-lg font-medium text-white">已報到</CardTitle>
               <UserCheck className="h-4 w-4 text-emerald-200" />
             </CardHeader>
             <CardContent>
@@ -348,8 +359,8 @@ export default function KidsDashboardPage() {
                   ${listMode === 'cancelled' && 'text-amber-200'}`}
               >
                 {listMode === 'all' && '全部兒童名單'}
-                {listMode === 'checked' && '已簽到兒童名單'}
-                {listMode === 'unchecked' && '尚未簽到兒童名單'}
+                {listMode === 'checked' && '已報到兒童名單'}
+                {listMode === 'unchecked' && '尚未報到兒童名單'}
                 {listMode === 'cancelled' && '不會出席兒童名單'}
               </CardTitle>
               <div className="mt-2 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
@@ -386,9 +397,9 @@ export default function KidsDashboardPage() {
                     ${listMode === 'unchecked' && 'text-red-300'}
                     ${listMode === 'cancelled' && 'text-amber-300'}`}
                 >
-                  {listMode === 'all' && '顯示所有兒童名單（包含已簽到、未簽到與不會出席）'}
-                  {listMode === 'checked' && '顯示目前已簽到的兒童'}
-                  {listMode === 'unchecked' && '顯示目前尚未簽到的兒童'}
+                  {listMode === 'all' && '顯示所有兒童名單（包含已報到、未報到與不會出席）'}
+                  {listMode === 'checked' && '顯示目前已報到的兒童'}
+                  {listMode === 'unchecked' && '顯示目前尚未報到的兒童'}
                   {listMode === 'cancelled' && '顯示已標記不會出席的兒童'}
                 </p>
               </div>
@@ -401,44 +412,83 @@ export default function KidsDashboardPage() {
               ) : (
                 <>
                   <div className="space-y-2">
-                    {pagedList.map((a, idx) => (
-                      <div
-                        key={`${a.序號}-${a.姓名}-${idx}`}
-                        className="flex items-center justify-between py-2 px-3 text-sm bg-slate-800 rounded-md border border-slate-700"
-                      >
-                        <div>
-                          <p className="font-medium text-slate-100">
-                            <span className="mr-2 text-slate-400">{a.序號}</span>
-                            {a.姓名}
-                          </p>
-                          <p className="text-[11px] text-slate-400 mt-0.5">
-                            {a.到達時間 || '-'}
-                          </p>
+                    {pagedList.map((a, idx) => {
+                      const itemKey = `${a.序號}-${a.姓名}`;
+                      const isExpanded = expandedItem === itemKey;
+                      
+                      return (
+                        <div
+                          key={`${itemKey}-${idx}`}
+                          className="bg-slate-800 rounded-md border border-slate-700 overflow-hidden"
+                        >
+                          <div
+                            className="flex items-center justify-between py-2 px-3 text-sm cursor-pointer hover:bg-slate-750 transition-colors"
+                            onClick={() => setExpandedItem(isExpanded ? null : itemKey)}
+                          >
+                            <div>
+                              <p className="font-medium text-slate-100">
+                                <span className="mr-2 text-slate-400">{a.序號}</span>
+                                {a.姓名}
+                              </p>
+                              <p className="text-[11px] text-slate-400 mt-0.5">
+                                {a.到達時間 || '-'}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {listMode === 'checked' && (
+                                <span className="text-[11px] text-emerald-300">已報到</span>
+                              )}
+                              {listMode === 'unchecked' && (
+                                <span className="text-[11px] text-slate-400">未報到</span>
+                              )}
+                              {listMode === 'cancelled' && (
+                                <span className="text-[11px] text-amber-300">不會出席</span>
+                              )}
+                              {listMode === 'all' && (
+                                <span className="text-[11px] font-semibold">
+                                  {a.已到 === 'TRUE' && (
+                                    <span className="text-emerald-300">已報到</span>
+                                  )}
+                                  {a.已到 === 'CANCELLED' && (
+                                    <span className="text-amber-300">不會出席</span>
+                                  )}
+                                  {a.已到 !== 'TRUE' && a.已到 !== 'CANCELLED' && (
+                                    <span className="text-slate-300">未報到</span>
+                                  )}
+                                </span>
+                              )}
+                              <span className="text-slate-400 text-xs">
+                                {isExpanded ? '▲' : '▼'}
+                              </span>
+                            </div>
+                          </div>
+                          
+                          {/* 展開的詳細資料 */}
+                          {isExpanded && a.詳細欄位 && a.詳細欄位.length > 0 && (
+                            <div className="px-3 py-2 border-t border-slate-700 bg-slate-850">
+                              <div className="space-y-1 text-xs">
+                                {a.詳細欄位.map((field, fieldIdx) => {
+                                  const hasValue = field.值 && field.值.trim().length > 0;
+                                  const hasTitle = field.標題 && field.標題.trim().length > 0;
+                                  if (!hasTitle && !hasValue) return null;
+                                  
+                                  return (
+                                    <div key={fieldIdx} className="flex justify-between gap-2">
+                                      <span className="text-slate-400">
+                                        {field.標題 || `欄位 ${fieldIdx + 1}`}：
+                                      </span>
+                                      <span className="text-slate-200 break-all">
+                                        {field.值 || '-'}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
                         </div>
-                        {listMode === 'checked' && (
-                          <span className="text-[11px] text-emerald-300">已簽到</span>
-                        )}
-                        {listMode === 'unchecked' && (
-                          <span className="text-[11px] text-slate-400">未簽到</span>
-                        )}
-                        {listMode === 'cancelled' && (
-                          <span className="text-[11px] text-amber-300">不會出席</span>
-                        )}
-                        {listMode === 'all' && (
-                          <span className="text-[11px] font-semibold">
-                            {a.已到 === 'TRUE' && (
-                              <span className="text-emerald-300">已簽到</span>
-                            )}
-                            {a.已到 === 'CANCELLED' && (
-                              <span className="text-amber-300">不會出席</span>
-                            )}
-                            {a.已到 !== 'TRUE' && a.已到 !== 'CANCELLED' && (
-                              <span className="text-slate-300">未簽到</span>
-                            )}
-                          </span>
-                        )}
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-3 text-[11px] text-slate-300">
                     <span>
@@ -524,7 +574,7 @@ export default function KidsDashboardPage() {
                       </span>
                     </div>
                   </div>
-                  <p className="mt-3 text-xs text-slate-300 text-center">目前已簽到兒童比例</p>
+                  <p className="mt-3 text-xs text-slate-300 text-center">目前已報到兒童比例</p>
                 </div>
               </div>
 
@@ -626,11 +676,11 @@ export default function KidsDashboardPage() {
               <div className="flex flex-wrap items-center gap-4 text-[13px]">
                 <div className="flex items-center gap-1">
                   <span className="w-3 h-3 rounded-full bg-emerald-400" />
-                  <span>已簽到兒童人數：{checked}</span>
+                  <span>已報到兒童人數：{checked}</span>
                 </div>
                 <div className="flex items-center gap-1">
                   <span className="w-3 h-3 rounded-full bg-slate-400" />
-                  <span>尚未簽到兒童人數：{unchecked}</span>
+                  <span>尚未報到兒童人數：{unchecked}</span>
                 </div>
                 <div className="flex items-center gap-1">
                   <span className="w-3 h-3 rounded-full bg-amber-300" />

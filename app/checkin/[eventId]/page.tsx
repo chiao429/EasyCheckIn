@@ -73,7 +73,7 @@ export default function CheckInPage() {
           </div>
           <CardTitle className="text-3xl">簽到</CardTitle>
           <CardDescription className="text-base">
-            請輸入您的序號或姓名進行簽到
+            請輸入您的姓名（全名）進行簽到
           </CardDescription>
         </CardHeader>
         
@@ -82,7 +82,7 @@ export default function CheckInPage() {
             <div className="space-y-2">
               <Input
                 type="text"
-                placeholder="請輸入序號或姓名"
+                placeholder="請輸入您的姓名"
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
                 disabled={loading}
@@ -139,8 +139,11 @@ export default function CheckInPage() {
             </div>
           )}
 
-          <div className="mt-6 pt-6 border-t text-center text-sm text-muted-foreground">
-            <p>活動 ID: {eventId}</p>
+          <div className="mt-6 pt-6 border-t text-center space-y-2">
+            <p className="text-sm text-amber-600 font-medium">
+              請輸入正確全名，若有問題請洽報到處
+            </p>
+            <p className="text-sm text-muted-foreground">活動 ID: {eventId}</p>
           </div>
         </CardContent>
       </Card>
