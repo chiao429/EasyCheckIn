@@ -270,9 +270,6 @@ export default function KidsCheckPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 md:p-8 flex flex-col">
       <div className="max-w-7xl mx-auto space-y-6 flex-1">
-          </div>
-        </div>
-
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Card className="mb-4">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
