@@ -31,7 +31,15 @@ export default function KidsCheckPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Attendee[]>([]);
   const [loading, setLoading] = useState(false);
-  const [stats, setStats] = useState({ total: 0, checked: 0, unchecked: 0 });
+  const [stats, setStats] = useState({
+    total: 0,
+    expected: 0,
+    checked: 0,
+    unchecked: 0,
+    cancelled: 0,
+    contacted: 0,
+    uncontacted: 0,
+  });
   const [pageSize, setPageSize] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
   const [rowActionLoading, setRowActionLoading] = useState<string | null>(null);
@@ -128,10 +136,22 @@ export default function KidsCheckPage() {
   const updateStats = (data: Attendee[]) => {
     const checked = data.filter((a) => a.已到 === 'TRUE').length;
     const total = data.length;
+    const cancelled = data.filter((a) => a.已到 === 'CANCELLED').length;
+    const contacted = data.filter(
+      (a) => a.已到 !== 'TRUE' && a.已到 !== 'CANCELLED' && a.需要聯繫 === 'TRUE'
+    ).length;
+    const uncontacted = data.filter(
+      (a) => a.已到 !== 'TRUE' && a.已到 !== 'CANCELLED' && a.需要聯繫 !== 'TRUE'
+    ).length;
+    const expected = checked + (total - checked - cancelled);
     setStats({
       total,
+      expected,
       checked,
-      unchecked: total - checked,
+      unchecked: total - checked - cancelled,
+      cancelled,
+      contacted,
+      uncontacted,
     });
   };
 
@@ -202,7 +222,30 @@ export default function KidsCheckPage() {
   const handleToggleContact = async (attendee: Attendee) => {
     const identifier = attendee.序號 || attendee.姓名;
     if (!identifier) return;
+
+    const key = identifier;
+    const toggleLocalContact = () => {
+      setAttendees((prev) =>
+        prev.map((a) =>
+          (a.序號 || a.姓名) === key
+            ? { ...a, 需要聯繫: a.需要聯繫 === 'TRUE' ? '' : 'TRUE' }
+            : a
+        )
+      );
+
+      setSearchResults((prev) =>
+        prev.map((a) =>
+          (a.序號 || a.姓名) === key
+            ? { ...a, 需要聯繫: a.需要聯繫 === 'TRUE' ? '' : 'TRUE' }
+            : a
+        )
+      );
+    };
+
+    // 樂觀更新：先在前端切換狀態
+    toggleLocalContact();
     setRowActionLoading(identifier + '-contact');
+
     try {
       const response = await fetch('/api/kids/manager/toggle-contact', {
         method: 'POST',
@@ -220,14 +263,15 @@ export default function KidsCheckPage() {
       const data = await response.json();
       if (!data.success) {
         console.error('Kids check toggle contact failed:', data.message);
+        // 若後端失敗，回滾本地狀態
+        toggleLocalContact();
       }
     } catch (error) {
       console.error('Kids check toggle contact error:', error);
+      // 發生錯誤也回滾
+      toggleLocalContact();
     } finally {
       setRowActionLoading(null);
-      const backendFilter: 'all' | 'checked' | 'unchecked' =
-        activeTab === 'checked' ? 'checked' : activeTab === 'unchecked' ? 'unchecked' : 'all';
-      fetchAttendees(backendFilter);
     }
   };
 
@@ -270,7 +314,7 @@ export default function KidsCheckPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 md:p-8 flex flex-col">
       <div className="max-w-7xl mx-auto space-y-6 flex-1">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <Card className="mb-4">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">總人數</CardTitle>
@@ -278,6 +322,10 @@ export default function KidsCheckPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats.total}</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                應到人數（已報到＋未報到，不含不會出席）：
+                <span className="font-semibold ml-1">{stats.expected}</span>
+              </p>
             </CardContent>
           </Card>
 
@@ -304,6 +352,42 @@ export default function KidsCheckPage() {
               <p className="text-xs text-muted-foreground mt-1">
                 {stats.total > 0 ? ((stats.unchecked / stats.total) * 100).toFixed(1) : 0}%
               </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">不會出席</CardTitle>
+              <UserX className="h-4 w-4 text-amber-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-amber-600">{stats.cancelled}</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {stats.total > 0 ? ((stats.cancelled / stats.total) * 100).toFixed(1) : 0}%
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="space-y-1 pb-2">
+              <CardTitle className="text-sm font-medium">聯繫狀態（未報到）</CardTitle>
+              <CardDescription className="text-xs">只統計尚未報到、未標記不會出席的名單</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col gap-1 text-sm">
+                <div className="flex items-baseline justify-between">
+                  <span className="text-slate-600">已聯繫</span>
+                  <span className="text-lg font-semibold text-emerald-600">
+                    {stats.contacted}
+                  </span>
+                </div>
+                <div className="flex items-baseline justify-between">
+                  <span className="text-slate-600">待聯繫</span>
+                  <span className="text-lg font-semibold text-amber-600">
+                    {stats.uncontacted}
+                  </span>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>
