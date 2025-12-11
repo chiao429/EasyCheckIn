@@ -152,3 +152,10 @@ npm run dev
 - 📖 詳細文件：查看 `README.md`
 - 🔧 完整設定：查看 `SETUP_GUIDE.md`
 - 🐛 問題回報：開 GitHub Issue
+
+---
+
+**專案**: EasyCheck - 活動點名系統  
+**版本**: 1.0.0  
+**授權**: MIT License  
+**建立日期**: 2024/11/28

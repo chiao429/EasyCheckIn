@@ -219,3 +219,10 @@ MIT License
 ## 支援
 
 如有問題或建議，歡迎開 Issue 或 Pull Request。
+
+---
+
+**專案**: EasyCheck - 活動點名系統  
+**版本**: 1.0.0  
+**授權**: MIT License  
+**建立日期**: 2024/11/28

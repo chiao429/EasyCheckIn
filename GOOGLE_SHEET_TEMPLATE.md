@@ -279,3 +279,10 @@ Google Sheets 會自動儲存版本記錄：
 - 主要文件：`README.md`
 - 設定指南：`SETUP_GUIDE.md`
 - 快速開始：`QUICKSTART.md`
+
+---
+
+**專案**: EasyCheck - 活動點名系統  
+**版本**: 1.0.0  
+**授權**: MIT License  
+**建立日期**: 2024/11/28

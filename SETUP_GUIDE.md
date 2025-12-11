@@ -298,3 +298,10 @@ NEXT_PUBLIC_ADMIN_PASSWORD=your-secure-password
 - 開 GitHub Issue
 - 查看 README.md 中的常見問題
 - 聯繫開發團隊
+
+---
+
+**專案**: EasyCheck - 活動點名系統  
+**版本**: 1.0.0  
+**授權**: MIT License  
+**建立日期**: 2024/11/28

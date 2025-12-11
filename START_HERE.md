@@ -1,18 +1,18 @@
-# 🎯 從這裡開始 - EasyCheck 活動點名系統
+# 從這裡開始 - EasyCheck 活動點名系統
 
 歡迎使用 EasyCheck！這是一個完整可部署的活動點名系統。
 
-## 📚 文件導覽
+## 文件導覽
 
 根據你的需求，選擇適合的文件：
 
-### 🚀 快速開始（推薦新手）
+### 快速開始（推薦新手）
 **[QUICKSTART.md](./QUICKSTART.md)** - 5 分鐘快速啟動指南
 - 最快的方式開始使用
 - 包含基本測試流程
 - 適合第一次使用
 
-### 📖 完整設定指南
+### 完整設定指南
 **[SETUP_GUIDE.md](./SETUP_GUIDE.md)** - 詳細的設定步驟
 - Google Cloud 專案設定
 - Google Sheets API 設定
@@ -20,42 +20,42 @@
 - Vercel 部署教學
 - 疑難排解
 
-### 📋 專案說明
+### 專案說明
 **[README.md](./README.md)** - 專案概述和功能介紹
 - 功能特色
 - 技術架構
 - 使用方式
 - 常見問題
 
-### 📊 Google Sheet 範本
+### Google Sheet 範本
 **[GOOGLE_SHEET_TEMPLATE.md](./GOOGLE_SHEET_TEMPLATE.md)** - 資料表格式說明
 - 標準範本格式
 - 範例資料
 - 進階設定
 - 資料維護技巧
 
-### ✅ 部署檢查清單
+### 部署檢查清單
 **[DEPLOYMENT_CHECKLIST.md](./DEPLOYMENT_CHECKLIST.md)** - 上線前檢查
 - 部署前準備
 - 測試項目
 - 上線檢查
 - 活動當天流程
 
-### 🏗️ 系統架構
+### 系統架構
 **[ARCHITECTURE.md](./ARCHITECTURE.md)** - 技術架構說明
 - 系統架構圖
 - 資料流程圖
 - 元件架構
 - 擴展性設計
 
-### 📝 專案總結
+### 專案總結
 **[PROJECT_SUMMARY.md](./PROJECT_SUMMARY.md)** - 完整專案資訊
 - 核心功能
 - API 文件
 - 安全性設計
 - 未來規劃
 
-## 🎬 快速開始三步驟
+## 快速開始三步驟
 
 ### 1️⃣ 安裝依賴
 ```bash
@@ -75,7 +75,7 @@ npm run dev
 
 開啟 http://localhost:3000 開始使用！
 
-## 📂 專案結構
+## 專案結構
 
 ```
 EasyCheck/
@@ -104,7 +104,7 @@ EasyCheck/
 └── 📄 package.json               ← 專案依賴
 ```
 
-## 🎯 使用場景
+## 使用場景
 
 ### 適合你的場景？
 - ✅ 中小型活動（< 1000 人）
@@ -120,7 +120,7 @@ EasyCheck/
 - 📥 CSV 報表匯出
 - 📱 響應式設計（手機/平板/電腦）
 
-## 🛠️ 技術棧
+## 技術棧
 
 - **前端**: Next.js 14 + TypeScript + TailwindCSS
 - **後端**: Next.js API Routes
@@ -128,7 +128,7 @@ EasyCheck/
 - **部署**: Vercel
 - **UI**: shadcn/ui + Lucide Icons
 
-## 📖 學習路徑
+## 學習路徑
 
 ### 第一次使用？
 1. 閱讀 **[QUICKSTART.md](./QUICKSTART.md)** （5 分鐘）
@@ -148,7 +148,7 @@ EasyCheck/
 3. 查看程式碼註解
 4. 自訂功能
 
-## 🆘 需要幫助？
+## 需要幫助？
 
 ### 常見問題
 查看各文件的「常見問題」章節：
@@ -168,7 +168,7 @@ EasyCheck/
 - 💬 查看專案文件
 - 🔍 搜尋相關錯誤訊息
 
-## ⚡ 快速指令
+## 快速指令
 
 ```bash
 # 安裝依賴
@@ -187,7 +187,7 @@ npm start
 npm run lint
 ```
 
-## 🎨 自訂設定
+## 自訂設定
 
 ### 修改樣式
 編輯 `app/globals.css` 中的 CSS 變數
@@ -200,14 +200,14 @@ npm run lint
 ### 新增功能
 參考現有程式碼結構，保持一致性
 
-## 📊 專案狀態
+## 專案狀態
 
 - ✅ 核心功能完成
 - ✅ 文件完整
 - ✅ 可立即部署
 - ✅ 生產環境就緒
 
-## 🚀 下一步
+## 下一步
 
 選擇你的路徑：
 
@@ -230,7 +230,7 @@ npm run lint
 3. 自訂功能
 4. 擴展系統
 
-## 💡 小提示
+## 小提示
 
 - 💾 記得備份 `.env` 檔案（但不要提交到 Git）
 - 🔑 使用強密碼保護管理後台
@@ -238,7 +238,7 @@ npm run lint
 - 🔄 定期備份 Google Sheet
 - 📱 測試不同裝置的顯示效果
 
-## 🎉 準備好了嗎？
+## 準備好了嗎？
 
 選擇一個文件開始吧！
 
