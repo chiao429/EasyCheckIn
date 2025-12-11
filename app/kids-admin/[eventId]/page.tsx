@@ -206,7 +206,13 @@ export default function KidsAdminPage() {
       console.error('Kids admin row mark cancelled error:', error);
     } finally {
       setRowActionLoading(null);
-      fetchAttendees(activeTab === 'search' ? 'all' : activeTab);
+      const backendFilter: 'all' | 'checked' | 'unchecked' =
+        activeTab === 'checked'
+          ? 'checked'
+          : activeTab === 'unchecked'
+          ? 'unchecked'
+          : 'all';
+      fetchAttendees(backendFilter);
     }
   };
 
