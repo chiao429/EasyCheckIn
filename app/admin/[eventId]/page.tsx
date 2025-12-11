@@ -19,11 +19,17 @@ import {
 const ADMIN_SESSION_KEY = 'easycheckin_admin_session';
 const ADMIN_SESSION_DURATION_MS = 15 * 60 * 1000;
 
+interface DetailField {
+  標題: string;
+  值: string;
+}
+
 interface Attendee {
   序號: string;
   姓名: string;
   到達時間: string;
   已到: string;
+  詳細欄位?: DetailField[];
 }
 
 export default function AdminPage() {
@@ -34,7 +40,9 @@ export default function AdminPage() {
   
   const [authenticated, setAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
-  const [activeTab, setActiveTab] = useState<'all' | 'checked' | 'unchecked' | 'search'>('all');
+  const [activeTab, setActiveTab] = useState<
+    'all' | 'checked' | 'unchecked' | 'cancelled' | 'search'
+  >('all');
   const [attendees, setAttendees] = useState<Attendee[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Attendee[]>([]);
@@ -62,6 +70,8 @@ export default function AdminPage() {
   const [concurrentStats, setConcurrentStats] = useState({ success: 0, failed: 0, limited: 0 });
   const [concurrentMessage, setConcurrentMessage] = useState<string | null>(null);
   const [sessionExpiry, setSessionExpiry] = useState<number | null>(null);
+  const [activitySheetUrl, setActivitySheetUrl] = useState<string | null>(null);
+  const [logSheetUrl, setLogSheetUrl] = useState<string | null>(null);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -130,7 +140,9 @@ export default function AdminPage() {
       console.error('Row cancel check-in error:', error);
     } finally {
       setRowActionLoading(null);
-      fetchAttendees(activeTab === 'search' ? 'all' : activeTab);
+      const backendFilter: 'all' | 'checked' | 'unchecked' =
+        activeTab === 'checked' ? 'checked' : activeTab === 'unchecked' ? 'unchecked' : 'all';
+      fetchAttendees(backendFilter);
     }
   };
 
@@ -219,12 +231,12 @@ export default function AdminPage() {
     });
   };
 
-  const handleTabChange = (tab: 'all' | 'checked' | 'unchecked' | 'search') => {
+  const handleTabChange = (
+    tab: 'all' | 'checked' | 'unchecked' | 'cancelled' | 'search'
+  ) => {
     setActiveTab(tab);
     setCurrentPage(1);
-    if (tab !== 'search') {
-      fetchAttendees(tab);
-    }
+    // 名單已載入在前端，切換分頁只做前端篩選即可；實際重新載入交給「重新整理」按鈕
   };
 
   const handleTestCheckIn = async () => {
@@ -251,7 +263,9 @@ export default function AdminPage() {
       const data = await response.json();
       if (data.success) {
         setTestResult(`✅ 測試簽到成功：${data.data?.序號 || ''} ${data.data?.姓名 || ''}（${data.data?.到達時間 || ''}）`);
-        fetchAttendees(activeTab === 'search' ? 'all' : activeTab);
+        const backendFilter: 'all' | 'checked' | 'unchecked' =
+          activeTab === 'checked' ? 'checked' : activeTab === 'unchecked' ? 'unchecked' : 'all';
+        fetchAttendees(backendFilter);
       } else {
         setTestResult(`❌ 測試簽到失敗：${data.message || '未知錯誤'}`);
       }
@@ -336,7 +350,9 @@ export default function AdminPage() {
     } finally {
       setLoadTestStats({ success, failed, limited });
       setLoadTestRunning(false);
-      fetchAttendees(activeTab === 'search' ? 'all' : activeTab);
+      const backendFilter: 'all' | 'checked' | 'unchecked' =
+        activeTab === 'checked' ? 'checked' : activeTab === 'unchecked' ? 'unchecked' : 'all';
+      fetchAttendees(backendFilter);
       if (lastLimitedMessage) {
         setLoadTestMessage(lastLimitedMessage);
       }
@@ -430,7 +446,9 @@ export default function AdminPage() {
     } finally {
       setRandomWriteStats({ success, failed, limited });
       setRandomWriteRunning(false);
-      fetchAttendees(activeTab === 'search' ? 'all' : activeTab);
+      const backendFilter: 'all' | 'checked' | 'unchecked' =
+        activeTab === 'checked' ? 'checked' : activeTab === 'unchecked' ? 'unchecked' : 'all';
+      fetchAttendees(backendFilter);
       if (lastLimitedMessage) {
         setRandomWriteMessage(lastLimitedMessage);
       }
@@ -523,7 +541,9 @@ export default function AdminPage() {
     } finally {
       setConcurrentStats({ success, failed, limited });
       setConcurrentRunning(false);
-      fetchAttendees(activeTab === 'search' ? 'all' : activeTab);
+      const backendFilter: 'all' | 'checked' | 'unchecked' =
+        activeTab === 'checked' ? 'checked' : activeTab === 'unchecked' ? 'unchecked' : 'all';
+      fetchAttendees(backendFilter);
       if (lastLimitedMessage) {
         setConcurrentMessage(lastLimitedMessage);
       }
@@ -532,16 +552,31 @@ export default function AdminPage() {
 
   const exportToCSV = () => {
     const data = activeTab === 'search' ? searchResults : attendees;
+
+    // 根據第一筆有詳細欄位的資料動態產生額外欄位標題
+    const firstWithDetails = data.find((a) => a.詳細欄位 && a.詳細欄位.length > 0);
+    const extraHeaders = firstWithDetails
+      ? (firstWithDetails.詳細欄位 || [])
+          .filter((f) => f.標題 && f.標題.trim().length > 0)
+          .map((f) => f.標題.trim())
+      : [];
+
+    const headerRow = ['序號', '姓名', '到達時間', '狀態', ...extraHeaders];
+
     const csv = [
-      ['序號', '姓名', '到達時間', '狀態'],
+      headerRow,
       ...data.map((a) => {
         const status = a.已到 === 'TRUE' ? '已簽到' : a.已到 === 'CANCELLED' ? '取消' : '未簽到';
-        return [a.序號, a.姓名, a.到達時間, status];
+        const extraValues = extraHeaders.map((h) => {
+          const field = a.詳細欄位?.find((f) => f.標題 === h);
+          return field?.值 ?? '';
+        });
+        return [a.序號, a.姓名, a.到達時間, status, ...extraValues];
       }),
     ]
       .map((row) => row.join(','))
       .join('\n');
-    
+
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
@@ -600,6 +635,19 @@ export default function AdminPage() {
   useEffect(() => {
     if (authenticated) {
       fetchAttendees('all');
+      // 讀取此活動對應的活動試算表與日誌試算表連結
+      (async () => {
+        try {
+          const res = await fetch(`/api/admin/event-sheets?eventId=${encodeURIComponent(eventId)}`);
+          const data = await res.json();
+          if (data.success && data.data) {
+            setActivitySheetUrl(data.data.activitySheetUrl || data.data.activitySheetLink || null);
+            setLogSheetUrl(data.data.logSheetUrl || data.data.logSheetLink || null);
+          }
+        } catch (e) {
+          console.error('Admin: failed to load event sheets', e);
+        }
+      })();
     }
   }, [authenticated]);
 
@@ -647,10 +695,37 @@ export default function AdminPage() {
             <h1 className="text-3xl font-bold text-slate-900">活動管理後台</h1>
             <p className="text-slate-600 mt-1">活動 ID: {eventId}</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2 justify-end">
+            {activitySheetUrl && (
+              <a
+                href={activitySheetUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <Button variant="outline" className="whitespace-nowrap">
+                  活動試算表
+                </Button>
+              </a>
+            )}
+            {logSheetUrl && (
+              <a
+                href={logSheetUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <Button variant="outline" className="whitespace-nowrap">
+                  日誌試算表
+                </Button>
+              </a>
+            )}
+            {!activitySheetUrl && !logSheetUrl && (
+              <Button variant="outline" disabled className="whitespace-nowrap opacity-70">
+                試算表連結未設定
+              </Button>
+            )}
             <Button
               variant="outline"
-              onClick={() => fetchAttendees(activeTab === 'search' ? 'all' : activeTab)}
+              onClick={() => fetchAttendees('all')}
               disabled={loading}
             >
               <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
@@ -672,15 +747,10 @@ export default function AdminPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats.total}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">不會出席</CardTitle>
-              <UserX className="h-4 w-4 text-amber-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-amber-600">{stats.cancelled}</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                應到人數（已簽到＋未簽到，不含不會出席）：
+                <span className="font-semibold ml-1">{stats.total - stats.cancelled}</span>
+              </p>
             </CardContent>
           </Card>
 
@@ -696,7 +766,7 @@ export default function AdminPage() {
               </p>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">未簽到</CardTitle>
@@ -709,37 +779,73 @@ export default function AdminPage() {
               </p>
             </CardContent>
           </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">不會出席</CardTitle>
+              <UserX className="h-4 w-4 text-amber-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-amber-600">{stats.cancelled}</div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Tabs */}
         <Card>
           <CardHeader>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant={activeTab === 'all' ? 'default' : 'outline'}
-                onClick={() => handleTabChange('all')}
-              >
-                全部名單
-              </Button>
-              <Button
-                variant={activeTab === 'checked' ? 'default' : 'outline'}
-                onClick={() => handleTabChange('checked')}
-              >
-                已簽到
-              </Button>
-              <Button
-                variant={activeTab === 'unchecked' ? 'default' : 'outline'}
-                onClick={() => handleTabChange('unchecked')}
-              >
-                未簽到
-              </Button>
-              <Button
-                variant={activeTab === 'search' ? 'default' : 'outline'}
-                onClick={() => handleTabChange('search')}
-              >
-                <Search className="w-4 h-4 mr-2" />
-                搜尋
-              </Button>
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-wrap items-center gap-4 text-sm">
+                <span className="text-slate-700 mr-1">篩選：</span>
+                <label className="inline-flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="admin-filter"
+                    className="h-4 w-4 border-slate-300 text-slate-900 focus:ring-slate-500"
+                    checked={activeTab === 'all'}
+                    onChange={() => handleTabChange('all')}
+                  />
+                  <span>全部名單</span>
+                </label>
+                <label className="inline-flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="admin-filter"
+                    className="h-4 w-4 border-slate-300 text-slate-900 focus:ring-slate-500"
+                    checked={activeTab === 'checked'}
+                    onChange={() => handleTabChange('checked')}
+                  />
+                  <span>已簽到</span>
+                </label>
+                <label className="inline-flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="admin-filter"
+                    className="h-4 w-4 border-slate-300 text-slate-900 focus:ring-slate-500"
+                    checked={activeTab === 'unchecked'}
+                    onChange={() => handleTabChange('unchecked')}
+                  />
+                  <span>未簽到</span>
+                </label>
+                <label className="inline-flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="admin-filter"
+                    className="h-4 w-4 border-slate-300 text-slate-900 focus:ring-slate-500"
+                    checked={activeTab === 'cancelled'}
+                    onChange={() => handleTabChange('cancelled')}
+                  />
+                  <span>不會出席（不會來）</span>
+                </label>
+                <Button
+                  variant={activeTab === 'search' ? 'default' : 'outline'}
+                  onClick={() => handleTabChange('search')}
+                  className="ml-auto"
+                >
+                  <Search className="w-4 h-4 mr-2" />
+                  搜尋
+                </Button>
+              </div>
             </div>
           </CardHeader>
 
@@ -767,12 +873,36 @@ export default function AdminPage() {
             ) : (
               <div className="overflow-x-auto">
                 {(() => {
-                  const dataSource = activeTab === 'search' ? searchResults : attendees;
+                  let dataSource: Attendee[] = [];
+                  if (activeTab === 'search') {
+                    dataSource = searchResults;
+                  } else if (activeTab === 'cancelled') {
+                    dataSource = attendees.filter((a) => a.已到 === 'CANCELLED');
+                  } else if (activeTab === 'checked') {
+                    dataSource = attendees.filter((a) => a.已到 === 'TRUE');
+                  } else if (activeTab === 'unchecked') {
+                    dataSource = attendees.filter(
+                      (a) => a.已到 !== 'TRUE' && a.已到 !== 'CANCELLED'
+                    );
+                  } else {
+                    dataSource = attendees;
+                  }
+
                   const totalItems = dataSource.length;
                   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
                   const safeCurrentPage = Math.min(currentPage, totalPages);
                   const startIndex = (safeCurrentPage - 1) * pageSize;
                   const pageItems = dataSource.slice(startIndex, startIndex + pageSize);
+
+                  // 根據第一筆有詳細欄位的資料動態決定要顯示的額外欄位
+                  const firstWithDetails = dataSource.find(
+                    (a) => a.詳細欄位 && a.詳細欄位.length > 0
+                  );
+                  const extraHeaders = firstWithDetails
+                    ? (firstWithDetails.詳細欄位 || [])
+                        .filter((f) => f.標題 && f.標題.trim().length > 0)
+                        .map((f) => f.標題.trim())
+                    : [];
 
                   return (
                     <>
@@ -780,10 +910,18 @@ export default function AdminPage() {
                         <thead>
                     <tr className="border-b">
                       <th className="text-left p-3 font-semibold">序號</th>
-                      <th className="text-left p-3 font-semibold">姓名</th>
-                      <th className="text-left p-3 font-semibold">到達時間</th>
-                      <th className="text-left p-3 font-semibold">狀態</th>
-                      <th className="text-left p-3 font-semibold w-40">操作</th>
+                          <th className="text-left p-3 font-semibold">姓名</th>
+                          <th className="text-left p-3 font-semibold">到達時間</th>
+                          <th className="text-left p-3 font-semibold">狀態</th>
+                          {extraHeaders.map((h) => (
+                            <th
+                              key={h}
+                              className="text-left p-3 font-semibold"
+                            >
+                              {h}
+                            </th>
+                          ))}
+                          <th className="text-left p-3 font-semibold w-40">操作</th>
                     </tr>
                   </thead>
                         <tbody>
@@ -810,6 +948,17 @@ export default function AdminPage() {
                             </span>
                           )}
                         </td>
+                        {extraHeaders.map((h) => {
+                          const field = attendee.詳細欄位?.find((f) => f.標題 === h);
+                          return (
+                            <td
+                              key={h}
+                              className="p-3 text-sm text-slate-700"
+                            >
+                              {field?.值 || '-'}
+                            </td>
+                          );
+                        })}
                         <td className="p-3">
                           <div className="flex flex-wrap gap-2 text-xs">
                             {attendee.已到 === 'TRUE' && (

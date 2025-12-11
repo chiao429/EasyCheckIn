@@ -93,9 +93,9 @@ export async function getAllAttendees(sheetId: string): Promise<Attendee[]> {
         已到: row[3],
         '性別_E': row[4],
         '所屬小組_F': row[5],
-        '聯絡電話_G': row[6],
-        'LineID_H': row[7],
-        '聯絡組_I': row[8],
+        '聯絡組_G': row[6],
+        '聯絡電話_H': row[7],
+        '其他_I': row[8],
       })));
     }
     
@@ -113,7 +113,8 @@ export async function getAllAttendees(sheetId: string): Promise<Attendee[]> {
         姓名: row[1] || '',
         到達時間: row[2] || '',
         已到: row[3] || 'FALSE',
-        聯絡組: (row[8] || '').toString().trim(), // I 欄是索引 8，確保轉字串並去除空白
+        // 聯絡組別固定從 G 欄讀取（索引 6）
+        聯絡組: (row[6] || '').toString().trim(),
         詳細欄位,
       };
     });

@@ -127,7 +127,7 @@ export default function KidsManagerPage() {
         setMessage('✅ 已取消報到，狀態恢復為未報到（兒童）');
         await refreshSelected(selected.序號 || selected.姓名);
       } else {
-        setMessage(`❌ 取消報到失敗：${data.message || '未知錯誤'}`);
+        setMessage('❌ 取消報到失敗：操作人數過多，請稍等10秒後再重試');
       }
     } catch (error) {
       console.error('Kids manager cancel check-in error:', error);

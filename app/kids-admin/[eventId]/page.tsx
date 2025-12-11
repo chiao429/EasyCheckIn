@@ -26,14 +26,14 @@ export default function KidsAdminPage() {
 
   const [authenticated, setAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
-  const [activeTab, setActiveTab] = useState<'all' | 'checked' | 'unchecked' | 'search'>(
-    'all'
-  );
+  const [activeTab, setActiveTab] = useState<
+    'all' | 'checked' | 'unchecked' | 'cancelled' | 'search'
+  >('all');
   const [attendees, setAttendees] = useState<Attendee[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Attendee[]>([]);
   const [loading, setLoading] = useState(false);
-  const [stats, setStats] = useState({ total: 0, checked: 0, unchecked: 0 });
+  const [stats, setStats] = useState({ total: 0, checked: 0, cancelled: 0, unchecked: 0 });
   const [pageSize, setPageSize] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
   const [sessionExpiry, setSessionExpiry] = useState<number | null>(null);
@@ -46,6 +46,8 @@ export default function KidsAdminPage() {
   const [randomWriteStats, setRandomWriteStats] = useState({ success: 0, failed: 0, limited: 0 });
   const [randomWriteMessage, setRandomWriteMessage] = useState<string | null>(null);
   const [rowActionLoading, setRowActionLoading] = useState<string | null>(null);
+  const [activitySheetUrl, setActivitySheetUrl] = useState<string | null>(null);
+  const [logSheetUrl, setLogSheetUrl] = useState<string | null>(null);
 
   const effectiveSheetId = sheetFromQuery || process.env.GOOGLE_SHEET_ID || eventId;
 
@@ -136,11 +138,13 @@ export default function KidsAdminPage() {
 
   const updateStats = (data: Attendee[]) => {
     const checked = data.filter((a) => a.已到 === 'TRUE').length;
+    const cancelled = data.filter((a) => a.已到 === 'CANCELLED').length;
     const total = data.length;
     setStats({
       total,
       checked,
-      unchecked: total - checked,
+      cancelled,
+      unchecked: total - checked - cancelled,
     });
   };
 
@@ -170,7 +174,9 @@ export default function KidsAdminPage() {
       console.error('Kids admin row cancel check-in error:', error);
     } finally {
       setRowActionLoading(null);
-      fetchAttendees(activeTab === 'search' ? 'all' : activeTab);
+      const backendFilter: 'all' | 'checked' | 'unchecked' =
+        activeTab === 'checked' ? 'checked' : activeTab === 'unchecked' ? 'unchecked' : 'all';
+      fetchAttendees(backendFilter);
     }
   };
 
@@ -204,12 +210,12 @@ export default function KidsAdminPage() {
     }
   };
 
-  const handleTabChange = (tab: 'all' | 'checked' | 'unchecked' | 'search') => {
+  const handleTabChange = (
+    tab: 'all' | 'checked' | 'unchecked' | 'cancelled' | 'search'
+  ) => {
     setActiveTab(tab);
     setCurrentPage(1);
-    if (tab !== 'search') {
-      fetchAttendees(tab);
-    }
+    // 名單已在前端，切換篩選只需前端過濾；重新載入交給「重新整理」按鈕
   };
 
   const exportToCSV = () => {
@@ -353,7 +359,9 @@ export default function KidsAdminPage() {
       setRandomWriteStats({ success, failed, limited });
       setRandomWriteRunning(false);
       // 更新畫面資料
-      fetchAttendees(activeTab === 'search' ? 'all' : activeTab);
+      const backendFilter: 'all' | 'checked' | 'unchecked' =
+        activeTab === 'checked' ? 'checked' : activeTab === 'unchecked' ? 'unchecked' : 'all';
+      fetchAttendees(backendFilter);
       if (lastLimitedMessage) {
         setRandomWriteMessage(lastLimitedMessage);
       }
@@ -404,6 +412,19 @@ export default function KidsAdminPage() {
   useEffect(() => {
     if (authenticated) {
       fetchAttendees('all');
+      // 讀取此活動對應的活動試算表與日誌試算表連結
+      (async () => {
+        try {
+          const res = await fetch(`/api/admin/event-sheets?eventId=${encodeURIComponent(eventId)}`);
+          const data = await res.json();
+          if (data.success && data.data) {
+            setActivitySheetUrl(data.data.activitySheetUrl || data.data.activitySheetLink || null);
+            setLogSheetUrl(data.data.logSheetUrl || data.data.logSheetLink || null);
+          }
+        } catch (e) {
+          console.error('Kids admin: failed to load event sheets', e);
+        }
+      })();
     }
   }, [authenticated]);
 
@@ -450,10 +471,37 @@ export default function KidsAdminPage() {
             <h1 className="text-3xl font-bold text-slate-900">兒童活動管理後台</h1>
             <p className="text-slate-600 mt-1">活動 ID: {eventId}</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2 justify-end">
+            {activitySheetUrl && (
+              <a
+                href={activitySheetUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <Button variant="outline" className="whitespace-nowrap">
+                  活動試算表
+                </Button>
+              </a>
+            )}
+            {logSheetUrl && (
+              <a
+                href={logSheetUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <Button variant="outline" className="whitespace-nowrap">
+                  日誌試算表
+                </Button>
+              </a>
+            )}
+            {!activitySheetUrl && !logSheetUrl && (
+              <Button variant="outline" disabled className="whitespace-nowrap opacity-70">
+                試算表連結未設定
+              </Button>
+            )}
             <Button
               variant="outline"
-              onClick={() => fetchAttendees(activeTab === 'search' ? 'all' : activeTab)}
+              onClick={() => fetchAttendees('all')}
               disabled={loading}
             >
               <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
@@ -466,7 +514,7 @@ export default function KidsAdminPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Card className="mb-4">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">總人數</CardTitle>
@@ -474,6 +522,10 @@ export default function KidsAdminPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats.total}</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                應到人數（已簽到＋未簽到，不含不會出席）：
+                <span className="font-semibold ml-1">{stats.total - stats.cancelled}</span>
+              </p>
             </CardContent>
           </Card>
 
@@ -502,36 +554,72 @@ export default function KidsAdminPage() {
               </p>
             </CardContent>
           </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">不會出席</CardTitle>
+              <UserX className="h-4 w-4 text-amber-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-amber-600">{stats.cancelled}</div>
+            </CardContent>
+          </Card>
         </div>
 
         <Card>
           <CardHeader>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant={activeTab === 'all' ? 'default' : 'outline'}
-                onClick={() => handleTabChange('all')}
-              >
-                全部名單
-              </Button>
-              <Button
-                variant={activeTab === 'checked' ? 'default' : 'outline'}
-                onClick={() => handleTabChange('checked')}
-              >
-                已簽到
-              </Button>
-              <Button
-                variant={activeTab === 'unchecked' ? 'default' : 'outline'}
-                onClick={() => handleTabChange('unchecked')}
-              >
-                未簽到
-              </Button>
-              <Button
-                variant={activeTab === 'search' ? 'default' : 'outline'}
-                onClick={() => handleTabChange('search')}
-              >
-                <Search className="w-4 h-4 mr-2" />
-                搜尋
-              </Button>
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-wrap items-center gap-4 text-sm">
+                <span className="text-slate-700 mr-1">篩選：</span>
+                <label className="inline-flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="kids-admin-filter"
+                    className="h-4 w-4 border-slate-300 text-slate-900 focus:ring-slate-500"
+                    checked={activeTab === 'all'}
+                    onChange={() => handleTabChange('all')}
+                  />
+                  <span>全部名單</span>
+                </label>
+                <label className="inline-flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="kids-admin-filter"
+                    className="h-4 w-4 border-slate-300 text-slate-900 focus:ring-slate-500"
+                    checked={activeTab === 'checked'}
+                    onChange={() => handleTabChange('checked')}
+                  />
+                  <span>已簽到</span>
+                </label>
+                <label className="inline-flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="kids-admin-filter"
+                    className="h-4 w-4 border-slate-300 text-slate-900 focus:ring-slate-500"
+                    checked={activeTab === 'unchecked'}
+                    onChange={() => handleTabChange('unchecked')}
+                  />
+                  <span>未簽到</span>
+                </label>
+                <label className="inline-flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="kids-admin-filter"
+                    className="h-4 w-4 border-slate-300 text-slate-900 focus:ring-slate-500"
+                    checked={activeTab === 'cancelled'}
+                    onChange={() => handleTabChange('cancelled')}
+                  />
+                  <span>不會出席（不會來）</span>
+                </label>
+                <Button
+                  variant={activeTab === 'search' ? 'default' : 'outline'}
+                  onClick={() => handleTabChange('search')}
+                  className="ml-auto"
+                >
+                  <Search className="w-4 h-4 mr-2" />
+                  搜尋
+                </Button>
+              </div>
             </div>
           </CardHeader>
 
@@ -559,7 +647,21 @@ export default function KidsAdminPage() {
             ) : (
               <div className="overflow-x-auto">
                 {(() => {
-                  const dataSource = activeTab === 'search' ? searchResults : attendees;
+                  let dataSource: Attendee[] = [];
+                  if (activeTab === 'search') {
+                    dataSource = searchResults;
+                  } else if (activeTab === 'cancelled') {
+                    dataSource = attendees.filter((a) => a.已到 === 'CANCELLED');
+                  } else if (activeTab === 'checked') {
+                    dataSource = attendees.filter((a) => a.已到 === 'TRUE');
+                  } else if (activeTab === 'unchecked') {
+                    dataSource = attendees.filter(
+                      (a) => a.已到 !== 'TRUE' && a.已到 !== 'CANCELLED'
+                    );
+                  } else {
+                    dataSource = attendees;
+                  }
+
                   const totalItems = dataSource.length;
                   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
                   const safeCurrentPage = Math.min(currentPage, totalPages);
