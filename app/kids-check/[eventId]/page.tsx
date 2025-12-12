@@ -44,6 +44,8 @@ export default function KidsCheckPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [rowActionLoading, setRowActionLoading] = useState<string | null>(null);
   const [activitySheetUrl, setActivitySheetUrl] = useState<string | null>(null);
+  const [logSheetUrl, setLogSheetUrl] = useState<string | null>(null);
+  const [tableFilter, setTableFilter] = useState('');
 
   const effectiveSheetId = sheetFromQuery || process.env.GOOGLE_SHEET_ID || eventId;
 
@@ -54,6 +56,7 @@ export default function KidsCheckPage() {
         const data = await res.json();
         if (data.success && data.data) {
           setActivitySheetUrl(data.data.activitySheetUrl || data.data.activitySheetLink || null);
+          setLogSheetUrl(data.data.logSheetUrl || data.data.logSheetLink || null);
         }
       } catch (e) {
         console.error('Kids check: failed to load event sheets', e);
@@ -374,6 +377,17 @@ export default function KidsCheckPage() {
                 </Button>
               </a>
             )}
+            {logSheetUrl ? (
+              <a href={logSheetUrl} target="_blank" rel="noopener noreferrer">
+                <Button variant="outline" className="whitespace-nowrap">
+                  日誌試算表
+                </Button>
+              </a>
+            ) : (
+              <Button variant="outline" disabled className="whitespace-nowrap opacity-70">
+                日誌試算表未設定
+              </Button>
+            )}
             <Button
               variant="outline"
               onClick={() => {
@@ -498,6 +512,34 @@ export default function KidsCheckPage() {
           </CardHeader>
 
           <CardContent>
+            <div className="mb-4">
+              <label className="text-sm font-medium">搜尋姓名或序號</label>
+              <div className="mt-2 flex gap-2">
+                <Input
+                  placeholder="例如：王小明 或 001"
+                  value={tableFilter}
+                  onChange={(e) => {
+                    setTableFilter(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setTableFilter('');
+                    setCurrentPage(1);
+                  }}
+                  disabled={!tableFilter.trim()}
+                  className="whitespace-nowrap"
+                >
+                  清除
+                </Button>
+              </div>
+              <p className="mt-1 text-xs text-slate-500">
+                會在目前列表中即時過濾（依分頁/狀態而定）。
+              </p>
+            </div>
+
             {activeTab === 'search' && (
               <div className="mb-6 flex gap-2">
                 <Input
@@ -535,6 +577,17 @@ export default function KidsCheckPage() {
                   } else {
                     dataSource = attendees;
                   }
+
+                  const filterText = tableFilter.trim();
+                  if (filterText) {
+                    const normalized = filterText.toLowerCase();
+                    dataSource = dataSource.filter((a) => {
+                      const id = (a.序號 || '').toString().toLowerCase();
+                      const name = (a.姓名 || '').toString().toLowerCase();
+                      return id.includes(normalized) || name.includes(normalized);
+                    });
+                  }
+
                   const totalItems = dataSource.length;
                   const effectivePageSize = pageSize === 0 ? totalItems : pageSize;
                   const totalPages = Math.max(1, Math.ceil(totalItems / Math.max(effectivePageSize, 1)));
@@ -700,7 +753,8 @@ export default function KidsCheckPage() {
                               className="border rounded px-2 py-1 text-xs bg-white"
                               value={pageSize}
                               onChange={(e) => {
-                                const size = Number(e.target.value) || 10;
+                                const parsed = Number(e.target.value);
+                                const size = Number.isNaN(parsed) ? 10 : parsed;
                                 setPageSize(size);
                                 setCurrentPage(1);
                               }}
