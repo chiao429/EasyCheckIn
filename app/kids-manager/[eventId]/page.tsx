@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { SiteFooter } from '@/components/SiteFooter';
-import { Search, UserCheck, UserX, Ban } from 'lucide-react';
+import { Search, UserCheck, UserX, Ban, MapPin } from 'lucide-react';
 
 interface KidsDetailField {
   標題: string;
@@ -22,11 +22,21 @@ interface Attendee {
   rowIndex?: number;
 }
 
+interface SquadScheduleItem {
+  area?: string;
+  time: string;
+  place: string;
+}
+
+type SquadScheduleMap = Record<string, SquadScheduleItem[]>;
+
 export default function KidsManagerPage() {
   const params = useParams();
   const eventId = params.eventId as string;
   const searchParams = useSearchParams();
   const sheetFromQuery = searchParams.get('sheet');
+
+  const [now, setNow] = useState<Date>(() => new Date());
 
   const [keyword, setKeyword] = useState('');
   const [staffName, setStaffName] = useState('');
@@ -36,6 +46,11 @@ export default function KidsManagerPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [showDetails, setShowDetails] = useState(false);
+
+  const [squadSchedule, setSquadSchedule] = useState<SquadScheduleMap | null>(null);
+  const [squadLookupLoading, setSquadLookupLoading] = useState(false);
+  const [squadLookupError, setSquadLookupError] = useState<string | null>(null);
+  const [squadLookupResult, setSquadLookupResult] = useState<SquadScheduleItem[] | null>(null);
 
   const effectiveSheetId = sheetFromQuery || process.env.GOOGLE_SHEET_ID || eventId;
 
@@ -66,6 +81,73 @@ export default function KidsManagerPage() {
         </span>
       </p>
     );
+  };
+
+  const getSquadCodeFromSelected = (attendee: Attendee | null) => {
+    if (!attendee || !attendee.詳細欄位 || attendee.詳細欄位.length === 0) return '';
+    const first = attendee.詳細欄位[0];
+    return (first?.值 || '').toString().trim();
+  };
+
+  const loadSquadScheduleIfNeeded = async () => {
+    if (squadSchedule) return squadSchedule;
+    setSquadLookupLoading(true);
+    setSquadLookupError(null);
+    try {
+      const response = await fetch('/groupSchedule.json');
+      if (!response.ok) {
+        throw new Error(`讀取小隊地點資料失敗（HTTP ${response.status}）`);
+      }
+      const data = (await response.json()) as SquadScheduleMap;
+      setSquadSchedule(data);
+      return data;
+    } catch (error) {
+      console.error('Load squad schedule error:', error);
+      setSquadLookupError('讀取小隊地點資料失敗，請確認 groupSchedule.json 是否存在且格式正確');
+      return null;
+    } finally {
+      setSquadLookupLoading(false);
+    }
+  };
+
+  const handleSquadLookup = async (code: string) => {
+    setNow(new Date());
+    const normalized = code.trim().toUpperCase();
+    if (!normalized) {
+      setSquadLookupError('此兒童尚未填寫小隊代碼');
+      setSquadLookupResult(null);
+      return;
+    }
+
+    setSquadLookupError(null);
+    setSquadLookupResult(null);
+
+    const scheduleMap = await loadSquadScheduleIfNeeded();
+    if (!scheduleMap) return;
+
+    const result = scheduleMap[normalized];
+    if (!result || result.length === 0) {
+      setSquadLookupError(`查無小隊「${normalized}」的地點資料`);
+      return;
+    }
+    setSquadLookupResult(result);
+  };
+
+  const toMinutesOfDay = (hhmm: string) => {
+    const [h, m] = hhmm.split(':').map((v) => parseInt(v, 10));
+    if (Number.isNaN(h) || Number.isNaN(m)) return null;
+    return h * 60 + m;
+  };
+
+  const isNowInTimeRange = (range: string) => {
+    const [startRaw, endRaw] = range.split('-').map((s) => s.trim());
+    if (!startRaw || !endRaw) return false;
+    const startMin = toMinutesOfDay(startRaw);
+    const endMin = toMinutesOfDay(endRaw);
+    if (startMin === null || endMin === null) return false;
+
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    return nowMin >= startMin && nowMin <= endMin;
   };
 
   const handleManagerCheckIn = async () => {
@@ -374,7 +456,66 @@ export default function KidsManagerPage() {
                       >
                         {showDetails ? '隱藏詳細資訊' : '顯示詳細資訊'}
                       </Button>
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-slate-300 text-slate-700 hover:bg-slate-100"
+                        onClick={() => {
+                          const fromSelected = getSquadCodeFromSelected(selected);
+                          handleSquadLookup(fromSelected);
+                        }}
+                        disabled={squadLookupLoading}
+                      >
+                        <MapPin className="w-4 h-4 mr-1" />
+                        {squadLookupLoading ? '查詢中...' : '查詢小隊地點'}
+                      </Button>
                     </div>
+
+                    {(squadLookupError || squadLookupResult) && (
+                      <div className="pt-3 border-t space-y-2">
+                        {squadLookupError && (
+                          <p className="text-xs text-rose-700 whitespace-pre-line">{squadLookupError}</p>
+                        )}
+
+                        {squadLookupResult && (
+                          <div className="border rounded-md bg-white">
+                            <div className="overflow-x-auto">
+                              <table className="min-w-[520px] w-full text-xs">
+                                <thead className="bg-slate-50 text-slate-600">
+                                  <tr className="text-left">
+                                    <th className="px-3 py-2 font-medium w-[92px]">區域</th>
+                                    <th className="px-3 py-2 font-medium w-[110px]">時間</th>
+                                    <th className="px-3 py-2 font-medium">地點</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y">
+                                  {squadLookupResult.map((item, idx) => {
+                                    const isNow = isNowInTimeRange(item.time);
+                                    return (
+                                      <tr
+                                        key={`${item.time}-${idx}`}
+                                        className={isNow ? 'bg-red-50 text-red-700' : 'text-slate-800'}
+                                      >
+                                        <td className="px-3 py-2 align-top whitespace-nowrap">
+                                          {item.area || '-'}
+                                        </td>
+                                        <td className={`px-3 py-2 align-top whitespace-nowrap ${isNow ? 'font-semibold' : ''}`}>
+                                          {item.time}
+                                        </td>
+                                        <td className={`px-3 py-2 align-top ${isNow ? 'font-semibold' : 'text-slate-700'}`}>
+                                          <span className="break-words">{item.place}</span>
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     {showDetails && selected.詳細欄位 && selected.詳細欄位.length > 0 && (
                       <div className="mt-3 pt-3 border-t text-xs text-slate-700 space-y-1">
