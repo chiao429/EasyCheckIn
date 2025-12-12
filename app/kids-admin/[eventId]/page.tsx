@@ -16,6 +16,7 @@ interface Attendee {
   姓名: string;
   到達時間: string;
   已到: string;
+  需要聯繫?: string;
 }
 
 export default function KidsAdminPage() {
@@ -33,7 +34,14 @@ export default function KidsAdminPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Attendee[]>([]);
   const [loading, setLoading] = useState(false);
-  const [stats, setStats] = useState({ total: 0, checked: 0, cancelled: 0, unchecked: 0 });
+  const [stats, setStats] = useState({
+    total: 0,
+    checked: 0,
+    cancelled: 0,
+    unchecked: 0,
+    contacted: 0,
+    uncontacted: 0,
+  });
   const [pageSize, setPageSize] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
   const [sessionExpiry, setSessionExpiry] = useState<number | null>(null);
@@ -140,11 +148,19 @@ export default function KidsAdminPage() {
     const checked = data.filter((a) => a.已到 === 'TRUE').length;
     const cancelled = data.filter((a) => a.已到 === 'CANCELLED').length;
     const total = data.length;
+    const contacted = data.filter(
+      (a) => a.已到 !== 'TRUE' && a.已到 !== 'CANCELLED' && a.需要聯繫 === 'TRUE'
+    ).length;
+    const uncontacted = data.filter(
+      (a) => a.已到 !== 'TRUE' && a.已到 !== 'CANCELLED' && a.需要聯繫 !== 'TRUE'
+    ).length;
     setStats({
       total,
       checked,
       cancelled,
       unchecked: total - checked - cancelled,
+      contacted,
+      uncontacted,
     });
   };
 
@@ -476,6 +492,7 @@ export default function KidsAdminPage() {
           <div>
             <h1 className="text-3xl font-bold text-slate-900">兒童活動管理後台</h1>
             <p className="text-slate-600 mt-1">活動 ID: {eventId}</p>
+            <p className="text-xs text-slate-500 mt-2">後台僅供檢視，無法進行簽到、標記晚到、聯繫等操作</p>
           </div>
           <div className="flex flex-wrap gap-2 justify-end">
             {activitySheetUrl && (
@@ -520,8 +537,13 @@ export default function KidsAdminPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card className="mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          <Card
+            className={`mb-4 cursor-pointer transition-shadow hover:shadow-md ${
+              activeTab === 'all' ? 'ring-2 ring-slate-400' : ''
+            }`}
+            onClick={() => handleTabChange('all')}
+          >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">總人數</CardTitle>
               <Users className="h-4 w-4 text-muted-foreground" />
@@ -535,7 +557,12 @@ export default function KidsAdminPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card
+            className={`cursor-pointer transition-shadow hover:shadow-md ${
+              activeTab === 'checked' ? 'ring-2 ring-emerald-400' : ''
+            }`}
+            onClick={() => handleTabChange('checked')}
+          >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">已簽到</CardTitle>
               <UserCheck className="h-4 w-4 text-green-600" />
@@ -548,7 +575,12 @@ export default function KidsAdminPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card
+            className={`cursor-pointer transition-shadow hover:shadow-md ${
+              activeTab === 'unchecked' ? 'ring-2 ring-red-400' : ''
+            }`}
+            onClick={() => handleTabChange('unchecked')}
+          >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">未簽到</CardTitle>
               <UserX className="h-4 w-4 text-red-600" />
@@ -561,7 +593,12 @@ export default function KidsAdminPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card
+            className={`cursor-pointer transition-shadow hover:shadow-md ${
+              activeTab === 'cancelled' ? 'ring-2 ring-amber-400' : ''
+            }`}
+            onClick={() => handleTabChange('cancelled')}
+          >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">不會出席</CardTitle>
               <UserX className="h-4 w-4 text-amber-600" />
@@ -570,68 +607,42 @@ export default function KidsAdminPage() {
               <div className="text-2xl font-bold text-amber-600">{stats.cancelled}</div>
             </CardContent>
           </Card>
+
+          <Card className="cursor-default transition-shadow hover:shadow-md">
+            <CardHeader className="space-y-1 pb-2">
+              <CardTitle className="text-sm font-medium">聯繫狀態（未報到）</CardTitle>
+              <CardDescription className="text-xs">只統計尚未報到、未標記不會出席的名單</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col gap-1 text-sm">
+                <div className="flex items-baseline justify-between">
+                  <span className="text-slate-600">已聯繫</span>
+                  <span className="text-lg font-semibold text-emerald-600">{stats.contacted}</span>
+                </div>
+                <div className="flex items-baseline justify-between">
+                  <span className="text-slate-600">待聯繫</span>
+                  <span className="text-lg font-semibold text-amber-600">{stats.uncontacted}</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         <Card>
-          <CardHeader>
-            <div className="flex flex-col gap-3">
-              <div className="flex flex-wrap items-center gap-4 text-sm">
-                <span className="text-slate-700 mr-1">篩選：</span>
-                <label className="inline-flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="kids-admin-filter"
-                    className="h-4 w-4 border-slate-300 text-slate-900 focus:ring-slate-500"
-                    checked={activeTab === 'all'}
-                    onChange={() => handleTabChange('all')}
-                  />
-                  <span>全部名單</span>
-                </label>
-                <label className="inline-flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="kids-admin-filter"
-                    className="h-4 w-4 border-slate-300 text-slate-900 focus:ring-slate-500"
-                    checked={activeTab === 'checked'}
-                    onChange={() => handleTabChange('checked')}
-                  />
-                  <span>已簽到</span>
-                </label>
-                <label className="inline-flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="kids-admin-filter"
-                    className="h-4 w-4 border-slate-300 text-slate-900 focus:ring-slate-500"
-                    checked={activeTab === 'unchecked'}
-                    onChange={() => handleTabChange('unchecked')}
-                  />
-                  <span>未簽到</span>
-                </label>
-                <label className="inline-flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="kids-admin-filter"
-                    className="h-4 w-4 border-slate-300 text-slate-900 focus:ring-slate-500"
-                    checked={activeTab === 'cancelled'}
-                    onChange={() => handleTabChange('cancelled')}
-                  />
-                  <span>不會出席（不會來）</span>
-                </label>
-                <Button
-                  variant={activeTab === 'search' ? 'default' : 'outline'}
-                  onClick={() => handleTabChange('search')}
-                  className="ml-auto"
-                >
+          {activeTab !== 'search' && (
+            <CardHeader>
+              <div className="flex items-center justify-end">
+                <Button variant="outline" onClick={() => handleTabChange('search')}>
                   <Search className="w-4 h-4 mr-2" />
                   搜尋
                 </Button>
               </div>
-            </div>
-          </CardHeader>
+            </CardHeader>
+          )}
 
           <CardContent>
             {activeTab === 'search' && (
-              <div className="mb-6 flex gap-2">
+              <div className="mt-4 mb-6 flex gap-2">
                 <Input
                   placeholder="搜尋報名序號或兒童姓名..."
                   value={searchQuery}
@@ -669,10 +680,11 @@ export default function KidsAdminPage() {
                   }
 
                   const totalItems = dataSource.length;
-                  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+                  const effectivePageSize = pageSize === 0 ? totalItems : pageSize;
+                  const totalPages = Math.max(1, Math.ceil(totalItems / Math.max(effectivePageSize, 1)));
                   const safeCurrentPage = Math.min(currentPage, totalPages);
-                  const startIndex = (safeCurrentPage - 1) * pageSize;
-                  const pageItems = dataSource.slice(startIndex, startIndex + pageSize);
+                  const startIndex = (safeCurrentPage - 1) * effectivePageSize;
+                  const pageItems = dataSource.slice(startIndex, startIndex + effectivePageSize);
 
                   return (
                     <>
@@ -781,6 +793,7 @@ export default function KidsAdminPage() {
                               <option value={10}>10 筆</option>
                               <option value={20}>20 筆</option>
                               <option value={50}>50 筆</option>
+                              <option value={0}>全部</option>
                             </select>
                           </div>
 

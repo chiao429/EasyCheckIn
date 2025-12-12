@@ -74,6 +74,88 @@ export default function ManagerPage() {
     }
   };
 
+  const handleMarkLate = async () => {
+    if (!selected || !effectiveSheetId) return;
+
+    const identifier = selected.序號 || selected.姓名;
+    if (!identifier) return;
+
+    const prevStatus = selected.已到;
+    const optimisticStatus = prevStatus === '晚到' ? '' : '晚到';
+
+    setActionLoading(true);
+    setMessage(null);
+
+    setSelected((prev) => {
+      if (!prev) return prev;
+      return { ...prev, 已到: optimisticStatus };
+    });
+    setResults((prev) =>
+      prev.map((item) => {
+        if (item.序號 === selected.序號 && item.姓名 === selected.姓名) {
+          return { ...item, 已到: optimisticStatus };
+        }
+        return item;
+      })
+    );
+
+    try {
+      const response = await fetch('/api/manager/mark-late', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sheetId: effectiveSheetId,
+          identifier,
+          eventId,
+          attendeeName: selected.姓名,
+          operator: staffName,
+        }),
+      });
+
+      const data = await response.json();
+      if (!data.success) {
+        throw new Error(data.message || '標記晚到失敗');
+      }
+
+      const serverStatus = typeof data.newStatus === 'string' ? data.newStatus : optimisticStatus;
+      setSelected((prev) => {
+        if (!prev) return prev;
+        return { ...prev, 已到: serverStatus };
+      });
+      setResults((prev) =>
+        prev.map((item) => {
+          if (item.序號 === selected.序號 && item.姓名 === selected.姓名) {
+            return { ...item, 已到: serverStatus };
+          }
+          return item;
+        })
+      );
+
+      setMessage(serverStatus === '晚到' ? '✅ 已標記為晚到' : '✅ 已取消晚到標記');
+    } catch (error) {
+      console.error('Manager mark-late error:', error);
+
+      setSelected((prev) => {
+        if (!prev) return prev;
+        return { ...prev, 已到: prevStatus };
+      });
+      setResults((prev) =>
+        prev.map((item) => {
+          if (item.序號 === selected.序號 && item.姓名 === selected.姓名) {
+            return { ...item, 已到: prevStatus };
+          }
+          return item;
+        })
+      );
+
+      setMessage(`❌ ${error instanceof Error ? error.message : '標記晚到時發生錯誤'}`);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const handleManagerCheckIn = async () => {
     if (!selected || !effectiveSheetId) return;
     setActionLoading(true);
@@ -352,6 +434,20 @@ export default function ManagerPage() {
                           disabled={actionLoading}
                         >
                           代為簽到
+                        </Button>
+                      )}
+
+                      {selected.已到 !== 'TRUE' && selected.已到 !== 'CANCELLED' && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className={`border-sky-300 text-sky-700 hover:bg-sky-50 transition-all disabled:opacity-60 disabled:cursor-not-allowed ${
+                            actionLoading ? 'opacity-60 animate-pulse' : ''
+                          }`}
+                          onClick={handleMarkLate}
+                          disabled={actionLoading}
+                        >
+                          {selected.已到 === '晚到' ? '取消晚到' : '標記晚到'}
                         </Button>
                       )}
 

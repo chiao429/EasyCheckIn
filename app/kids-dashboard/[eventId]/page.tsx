@@ -17,6 +17,7 @@ interface Attendee {
   姓名: string;
   到達時間: string;
   已到: string;
+  需要聯繫?: string;
   詳細欄位?: DetailField[];
 }
 
@@ -36,7 +37,9 @@ export default function KidsDashboardPage() {
   const [showDetails, setShowDetails] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showContactedInUnchecked, setShowContactedInUnchecked] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(5);
   // 追蹤展開詳細資料的項目（使用序號+姓名作為唯一識別）
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
 
@@ -104,6 +107,15 @@ export default function KidsDashboardPage() {
       } else if (storedDetails === 'false') {
         setShowDetails(false);
       }
+
+      const pageSizeKey = `kids_dashboard_page_size_${eventId}`;
+      const storedPageSize = window.localStorage.getItem(pageSizeKey);
+      if (storedPageSize !== null) {
+        const parsed = Number(storedPageSize);
+        if (!Number.isNaN(parsed) && parsed >= 0) {
+          setPageSize(parsed);
+        }
+      }
     } catch {
       // ignore
     }
@@ -140,12 +152,31 @@ export default function KidsDashboardPage() {
     }
   }, [listMode, eventId, hydrated]);
 
+  useEffect(() => {
+    if (!hydrated) return;
+    try {
+      if (typeof window !== 'undefined') {
+        const storageKey = `kids_dashboard_page_size_${eventId}`;
+        window.localStorage.setItem(storageKey, String(pageSize));
+      }
+    } catch {
+      // ignore
+    }
+  }, [pageSize, eventId, hydrated]);
+
   const total = attendees.length;
   const checked = attendees.filter((a) => a.已到 === 'TRUE').length;
   const cancelled = attendees.filter((a) => a.已到 === 'CANCELLED').length;
   const unchecked = total - checked - cancelled;
   const effectiveTotalForRate = total - cancelled;
   const rate = effectiveTotalForRate > 0 ? (checked / effectiveTotalForRate) * 100 : 0;
+
+  const contacted = attendees.filter(
+    (a) => a.已到 !== 'TRUE' && a.已到 !== 'CANCELLED' && a.需要聯繫 === 'TRUE'
+  ).length;
+  const uncontacted = attendees.filter(
+    (a) => a.已到 !== 'TRUE' && a.已到 !== 'CANCELLED' && a.需要聯繫 !== 'TRUE'
+  ).length;
 
   const checkedList = attendees.filter((a) => a.已到 === 'TRUE');
   const cancelledList = attendees.filter((a) => a.已到 === 'CANCELLED');
@@ -165,18 +196,25 @@ export default function KidsDashboardPage() {
     }
   };
 
-  const PAGE_SIZE = 5;
   const rawDetailList = getDetailList();
-  const detailList =
+  let detailList = rawDetailList;
+
+  if (listMode === 'unchecked' && showContactedInUnchecked) {
+    detailList = detailList.filter((a) => a.需要聯繫 !== 'TRUE');
+  }
+
+  detailList =
     searchQuery.trim().length === 0
-      ? rawDetailList
-      : rawDetailList.filter((a) =>
+      ? detailList
+      : detailList.filter((a) =>
           a.姓名.toLowerCase().includes(searchQuery.trim().toLowerCase())
         );
-  const totalPages = Math.max(1, Math.ceil(detailList.length / PAGE_SIZE));
+
+  const effectivePageSize = pageSize === 0 ? detailList.length : pageSize;
+  const totalPages = Math.max(1, Math.ceil(detailList.length / Math.max(effectivePageSize, 1)));
   const safePage = Math.min(currentPage, totalPages);
-  const startIndex = (safePage - 1) * PAGE_SIZE;
-  const pagedList = detailList.slice(startIndex, startIndex + PAGE_SIZE);
+  const startIndex = (safePage - 1) * effectivePageSize;
+  const pagedList = detailList.slice(startIndex, startIndex + effectivePageSize);
 
   const handleChangeListMode = (
     mode: 'all' | 'checked' | 'cancelled' | 'unchecked'
@@ -244,7 +282,7 @@ export default function KidsDashboardPage() {
         )}
 
         {/* KPI Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <Card
             className={`bg-slate-700 border-slate-600 transition-all cursor-pointer hover:shadow-md ${
               showDetails && listMode === 'all'
@@ -341,6 +379,25 @@ export default function KidsDashboardPage() {
               <p className="text-xs text-amber-200 mt-1">已標記不會出席的兒童</p>
             </CardContent>
           </Card>
+
+          <Card className="cursor-default transition-shadow hover:shadow-md bg-slate-900/80 border border-slate-700">
+            <CardHeader className="space-y-1 pb-2">
+              <CardTitle className="text-sm font-medium text-white">聯繫狀態（未報到）</CardTitle>
+              <p className="text-[11px] text-slate-400">只統計尚未報到、未標記不會出席的名單</p>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col gap-1 text-sm">
+                <div className="flex items-baseline justify-between">
+                  <span className="text-slate-300">已聯繫</span>
+                  <span className="text-lg font-semibold text-emerald-300">{contacted}</span>
+                </div>
+                <div className="flex items-baseline justify-between">
+                  <span className="text-slate-300">待聯繫</span>
+                  <span className="text-lg font-semibold text-amber-300">{uncontacted}</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {showDetails && (
@@ -364,6 +421,22 @@ export default function KidsDashboardPage() {
                 {listMode === 'cancelled' && '不會出席兒童名單'}
               </CardTitle>
               <div className="mt-2 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                {listMode === 'unchecked' && (
+                  <div className="flex items-center justify-end">
+                    <label className="inline-flex items-center gap-2 text-xs text-slate-200">
+                      <input
+                        type="checkbox"
+                        checked={showContactedInUnchecked}
+                        onChange={(e) => {
+                          setShowContactedInUnchecked(e.target.checked);
+                          setCurrentPage(1);
+                        }}
+                        className="w-3 h-3 text-emerald-500 bg-slate-900 border-slate-600 focus:ring-emerald-500 focus:ring-2"
+                      />
+                      只顯示待聯繫
+                    </label>
+                  </div>
+                )}
                 <div className="flex w-full md:w-auto items-center gap-2">
                   <input
                     type="text"
@@ -429,6 +502,17 @@ export default function KidsDashboardPage() {
                               <p className="font-medium text-slate-100">
                                 <span className="mr-2 text-slate-400">{a.序號}</span>
                                 {a.姓名}
+                                {a.已到 !== 'TRUE' && a.已到 !== 'CANCELLED' && (
+                                  a.需要聯繫 === 'TRUE' ? (
+                                    <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-900 text-emerald-200 border border-emerald-800">
+                                      ✓ 已聯繫
+                                    </span>
+                                  ) : (
+                                    <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-900 text-amber-200 border border-amber-800">
+                                      待聯繫
+                                    </span>
+                                  )
+                                )}
                               </p>
                               <p className="text-[11px] text-slate-400 mt-0.5">
                                 {a.到達時間 || '-'}
@@ -491,9 +575,25 @@ export default function KidsDashboardPage() {
                     })}
                   </div>
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-3 text-[11px] text-slate-300">
-                    <span>
-                      第 {safePage} / {totalPages} 頁（每頁 {PAGE_SIZE} 筆，共 {detailList.length} 筆）
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span>每頁</span>
+                      <select
+                        value={pageSize}
+                        onChange={(e) => {
+                          const size = Number(e.target.value);
+                          setPageSize(Number.isNaN(size) ? 5 : size);
+                          setCurrentPage(1);
+                        }}
+                        className="rounded border border-slate-600 bg-slate-900 px-2 py-0.5 text-[11px] text-slate-200 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      >
+                        <option value={5}>5</option>
+                        <option value={10}>10</option>
+                        <option value={0}>全部</option>
+                      </select>
+                      <span>
+                        第 {safePage} / {totalPages} 頁（共 {detailList.length} 筆）
+                      </span>
+                    </div>
                     <div className="flex items-center gap-2">
                       <Button
                         variant="outline"
@@ -603,7 +703,7 @@ export default function KidsDashboardPage() {
                       <span className="text-[11px] uppercase tracking-wide text-slate-400">
                         尚未簽到率
                       </span>
-                      <span className="text-xl font-semibold text白">
+                      <span className="text-xl font-semibold text-white">
                         {effectiveTotalForRate > 0
                           ? ((unchecked / effectiveTotalForRate) * 100).toFixed(1)
                           : '0.0'}

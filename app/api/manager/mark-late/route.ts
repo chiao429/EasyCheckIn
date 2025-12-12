@@ -58,6 +58,23 @@ export async function POST(request: NextRequest) {
 
     const actualRowIndex = rowIndex + 2;
 
+    if (currentStatus === 'TRUE') {
+      await logManagerAction({
+        eventId,
+        action: 'mark_late_failed',
+        identifier,
+        attendeeName,
+        result: 'FAILED',
+        message: '已簽到者不可標記為晚到',
+        operator,
+      });
+
+      return NextResponse.json(
+        { success: false, message: '目前狀態為已簽到，無法再標記晚到（請先重新整理或確認狀態）' },
+        { status: 409 }
+      );
+    }
+
     const isCurrentlyLate = currentStatus === '晚到';
     const newValues: string[] = isCurrentlyLate ? ['', ''] : ['', '晚到'];
 

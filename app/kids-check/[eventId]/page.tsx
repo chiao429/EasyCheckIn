@@ -43,8 +43,23 @@ export default function KidsCheckPage() {
   const [pageSize, setPageSize] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
   const [rowActionLoading, setRowActionLoading] = useState<string | null>(null);
+  const [activitySheetUrl, setActivitySheetUrl] = useState<string | null>(null);
 
   const effectiveSheetId = sheetFromQuery || process.env.GOOGLE_SHEET_ID || eventId;
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(`/api/admin/event-sheets?eventId=${encodeURIComponent(eventId)}`);
+        const data = await res.json();
+        if (data.success && data.data) {
+          setActivitySheetUrl(data.data.activitySheetUrl || data.data.activitySheetLink || null);
+        }
+      } catch (e) {
+        console.error('Kids check: failed to load event sheets', e);
+      }
+    })();
+  }, [eventId]);
 
   // 從 URL 恢復分頁、頁碼和頁面大小
   useEffect(() => {
@@ -65,7 +80,7 @@ export default function KidsCheckPage() {
 
     if (size) {
       const parsedSize = parseInt(size, 10);
-      if (!Number.isNaN(parsedSize) && parsedSize > 0) {
+      if (!Number.isNaN(parsedSize) && parsedSize >= 0) {
         setPageSize(parsedSize);
       }
     }
@@ -181,9 +196,7 @@ export default function KidsCheckPage() {
       console.error('Kids check row cancel check-in error:', error);
     } finally {
       setRowActionLoading(null);
-      const backendFilter: 'all' | 'checked' | 'unchecked' =
-        activeTab === 'checked' ? 'checked' : activeTab === 'unchecked' ? 'unchecked' : 'all';
-      fetchAttendees(backendFilter);
+      fetchAttendees('all');
     }
   };
 
@@ -213,9 +226,7 @@ export default function KidsCheckPage() {
       console.error('Kids check row mark cancelled error:', error);
     } finally {
       setRowActionLoading(null);
-      const backendFilter: 'all' | 'checked' | 'unchecked' =
-        activeTab === 'checked' ? 'checked' : activeTab === 'unchecked' ? 'unchecked' : 'all';
-      fetchAttendees(backendFilter);
+      fetchAttendees('all');
     }
   };
 
@@ -224,26 +235,65 @@ export default function KidsCheckPage() {
     if (!identifier) return;
 
     const key = identifier;
-    const toggleLocalContact = () => {
+    const getParentKey = (a: Attendee) => {
+      const detail = a.詳細欄位 || [];
+      const phoneField = detail.find((f) => f.標題.includes('行動電話') || f.標題.includes('電話'));
+      const phone = (phoneField?.值 || '').toString().trim();
+      if (phone) return `phone:${phone}`;
+      const parentField = detail.find((f) => f.標題.includes('家長'));
+      const parent = (parentField?.值 || '').toString().trim();
+      if (parent) return `parent:${parent}`;
+      return '';
+    };
+    const targetStatus = attendee.需要聯繫 === 'TRUE' ? '' : 'TRUE';
+    const parentKey = getParentKey(attendee);
+    const isAffected = (a: Attendee) => {
+      if (parentKey) return getParentKey(a) === parentKey;
+      return (a.序號 || a.姓名) === key;
+    };
+
+    const prevStatusMap = new Map<string, string>();
+    for (const a of attendees) {
+      if (isAffected(a)) {
+        prevStatusMap.set((a.序號 || a.姓名) as string, (a.需要聯繫 || '').toString());
+      }
+    }
+    for (const a of searchResults) {
+      if (isAffected(a)) {
+        prevStatusMap.set((a.序號 || a.姓名) as string, (a.需要聯繫 || '').toString());
+      }
+    }
+
+    const applyLocalContactStatus = (newStatus: string) => {
       setAttendees((prev) =>
-        prev.map((a) =>
-          (a.序號 || a.姓名) === key
-            ? { ...a, 需要聯繫: a.需要聯繫 === 'TRUE' ? '' : 'TRUE' }
-            : a
-        )
+        prev.map((a) => (isAffected(a) ? { ...a, 需要聯繫: newStatus } : a))
       );
 
       setSearchResults((prev) =>
-        prev.map((a) =>
-          (a.序號 || a.姓名) === key
-            ? { ...a, 需要聯繫: a.需要聯繫 === 'TRUE' ? '' : 'TRUE' }
-            : a
-        )
+        prev.map((a) => (isAffected(a) ? { ...a, 需要聯繫: newStatus } : a))
+      );
+    };
+
+    const restoreLocalContactStatus = () => {
+      setAttendees((prev) =>
+        prev.map((a) => {
+          const k = (a.序號 || a.姓名) as string;
+          if (!prevStatusMap.has(k)) return a;
+          return { ...a, 需要聯繫: prevStatusMap.get(k) || '' };
+        })
+      );
+
+      setSearchResults((prev) =>
+        prev.map((a) => {
+          const k = (a.序號 || a.姓名) as string;
+          if (!prevStatusMap.has(k)) return a;
+          return { ...a, 需要聯繫: prevStatusMap.get(k) || '' };
+        })
       );
     };
 
     // 樂觀更新：先在前端切換狀態
-    toggleLocalContact();
+    applyLocalContactStatus(targetStatus);
     setRowActionLoading(identifier + '-contact');
 
     try {
@@ -264,12 +314,12 @@ export default function KidsCheckPage() {
       if (!data.success) {
         console.error('Kids check toggle contact failed:', data.message);
         // 若後端失敗，回滾本地狀態
-        toggleLocalContact();
+        restoreLocalContactStatus();
       }
     } catch (error) {
       console.error('Kids check toggle contact error:', error);
       // 發生錯誤也回滾
-      toggleLocalContact();
+      restoreLocalContactStatus();
     } finally {
       setRowActionLoading(null);
     }
@@ -281,10 +331,8 @@ export default function KidsCheckPage() {
     setActiveTab(tab);
     setCurrentPage(1);
     if (tab === 'search') return;
-    // 「不會出席」分頁使用前端篩選，因此向後端請求全部名單即可
-    const backendFilter: 'all' | 'checked' | 'unchecked' =
-      tab === 'cancelled' ? 'all' : tab;
-    fetchAttendees(backendFilter);
+    // 為了確保上方統計 panel 正確，這裡固定抓取完整名單，列表再用前端篩選
+    fetchAttendees('all');
   };
 
   const exportToCSV = () => {
@@ -306,16 +354,51 @@ export default function KidsCheckPage() {
   };
 
   useEffect(() => {
-    const initialFilter: 'all' | 'checked' | 'unchecked' =
-      activeTab === 'search' || activeTab === 'cancelled' ? 'all' : activeTab;
-    fetchAttendees(initialFilter);
+    if (activeTab === 'search') return;
+    fetchAttendees('all');
   }, [activeTab]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 md:p-8 flex flex-col">
       <div className="max-w-7xl mx-auto space-y-6 flex-1">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold text-slate-900">現場工作主責人員</h1>
+            <p className="text-sm text-slate-600 mt-1">活動 ID: {eventId}</p>
+          </div>
+          <div className="flex flex-wrap gap-2 justify-end">
+            {activitySheetUrl && (
+              <a href={activitySheetUrl} target="_blank" rel="noopener noreferrer">
+                <Button variant="outline" className="whitespace-nowrap">
+                  活動試算表
+                </Button>
+              </a>
+            )}
+            <Button
+              variant="outline"
+              onClick={() => {
+                const backendFilter: 'all' | 'checked' | 'unchecked' =
+                  activeTab === 'checked'
+                    ? 'checked'
+                    : activeTab === 'unchecked'
+                    ? 'unchecked'
+                    : 'all';
+                fetchAttendees(backendFilter);
+              }}
+              disabled={loading}
+            >
+              <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              重新整理
+            </Button>
+          </div>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-          <Card className="mb-4">
+          <Card
+            className={`mb-4 cursor-pointer transition-shadow hover:shadow-md ${
+              activeTab === 'all' ? 'ring-2 ring-slate-400' : ''
+            }`}
+            onClick={() => handleTabChange('all')}
+          >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">總人數</CardTitle>
               <Users className="h-4 w-4 text-muted-foreground" />
@@ -329,7 +412,12 @@ export default function KidsCheckPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card
+            className={`cursor-pointer transition-shadow hover:shadow-md ${
+              activeTab === 'checked' ? 'ring-2 ring-emerald-400' : ''
+            }`}
+            onClick={() => handleTabChange('checked')}
+          >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">已報到</CardTitle>
               <UserCheck className="h-4 w-4 text-green-600" />
@@ -342,7 +430,12 @@ export default function KidsCheckPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card
+            className={`cursor-pointer transition-shadow hover:shadow-md ${
+              activeTab === 'unchecked' ? 'ring-2 ring-red-400' : ''
+            }`}
+            onClick={() => handleTabChange('unchecked')}
+          >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">未報到</CardTitle>
               <UserX className="h-4 w-4 text-red-600" />
@@ -355,7 +448,12 @@ export default function KidsCheckPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card
+            className={`cursor-pointer transition-shadow hover:shadow-md ${
+              activeTab === 'cancelled' ? 'ring-2 ring-amber-400' : ''
+            }`}
+            onClick={() => handleTabChange('cancelled')}
+          >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">不會出席</CardTitle>
               <UserX className="h-4 w-4 text-amber-600" />
@@ -395,68 +493,7 @@ export default function KidsCheckPage() {
         <Card>
           <CardHeader>
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div className="flex flex-wrap items-center gap-4 text-sm">
-                <span className="text-slate-700 mr-1">篩選：</span>
-                <label className="inline-flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="kids-filter"
-                    className="h-4 w-4 border-slate-300 text-slate-900 focus:ring-slate-500"
-                    checked={activeTab === 'all'}
-                    onChange={() => handleTabChange('all')}
-                  />
-                  <span>全部名單</span>
-                </label>
-                <label className="inline-flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="kids-filter"
-                    className="h-4 w-4 border-slate-300 text-slate-900 focus:ring-slate-500"
-                    checked={activeTab === 'checked'}
-                    onChange={() => handleTabChange('checked')}
-                  />
-                  <span>已報到</span>
-                </label>
-                <label className="inline-flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="kids-filter"
-                    className="h-4 w-4 border-slate-300 text-slate-900 focus:ring-slate-500"
-                    checked={activeTab === 'unchecked'}
-                    onChange={() => handleTabChange('unchecked')}
-                  />
-                  <span>未報到</span>
-                </label>
-                <label className="inline-flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="kids-filter"
-                    className="h-4 w-4 border-slate-300 text-slate-900 focus:ring-slate-500"
-                    checked={activeTab === 'cancelled'}
-                    onChange={() => handleTabChange('cancelled')}
-                  />
-                  <span>不會出席</span>
-                </label>
-              </div>
-
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    const backendFilter: 'all' | 'checked' | 'unchecked' =
-                      activeTab === 'checked'
-                        ? 'checked'
-                        : activeTab === 'unchecked'
-                        ? 'unchecked'
-                        : 'all';
-                    fetchAttendees(backendFilter);
-                  }}
-                  disabled={loading}
-                >
-                  <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                  重新整理
-                </Button>
-              </div>
+              <div />
             </div>
           </CardHeader>
 
@@ -499,10 +536,11 @@ export default function KidsCheckPage() {
                     dataSource = attendees;
                   }
                   const totalItems = dataSource.length;
-                  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+                  const effectivePageSize = pageSize === 0 ? totalItems : pageSize;
+                  const totalPages = Math.max(1, Math.ceil(totalItems / Math.max(effectivePageSize, 1)));
                   const safeCurrentPage = Math.min(currentPage, totalPages);
-                  const startIndex = (safeCurrentPage - 1) * pageSize;
-                  const pageItems = dataSource.slice(startIndex, startIndex + pageSize);
+                  const startIndex = (safeCurrentPage - 1) * effectivePageSize;
+                  const pageItems = dataSource.slice(startIndex, startIndex + effectivePageSize);
 
                   return (
                     <>
@@ -546,6 +584,8 @@ export default function KidsCheckPage() {
                               <td className="p-3">
                                 {attendee.已到 === 'TRUE' ? (
                                   <span className="text-xs text-slate-400">已報到</span>
+                                ) : attendee.已到 === 'CANCELLED' ? (
+                                  <span className="text-xs text-slate-400">-</span>
                                 ) : attendee.需要聯繫 === 'TRUE' ? (
                                   <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                                     ✓ 已聯繫
@@ -622,14 +662,14 @@ export default function KidsCheckPage() {
                                       標記為不會出席
                                     </Button>
                                   )}
-                                  {attendee.已到 !== 'TRUE' && (
+                                  {attendee.已到 !== 'TRUE' && attendee.已到 !== 'CANCELLED' && (
                                     <Button
                                       variant="outline"
                                       size="sm"
                                       className={`h-7 px-2 text-xs ${
                                         attendee.需要聯繫 === 'TRUE'
                                           ? 'border-green-300 bg-green-50 text-green-700 hover:bg-green-100'
-                                          : 'border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100'
+                                          : 'border-purple-300 bg-purple-50 text-purple-700 hover:bg-purple-100'
                                       }`}
                                       onClick={() => handleToggleContact(attendee)}
                                       disabled={
@@ -668,6 +708,7 @@ export default function KidsCheckPage() {
                               <option value={10}>10 筆</option>
                               <option value={20}>20 筆</option>
                               <option value={50}>50 筆</option>
+                              <option value={0}>全部</option>
                             </select>
                           </div>
 

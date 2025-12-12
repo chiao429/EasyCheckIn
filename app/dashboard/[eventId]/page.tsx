@@ -35,8 +35,8 @@ export default function DashboardPage() {
   const [listMode, setListMode] = useState<'all' | 'checked' | 'cancelled' | 'unchecked'>(
     'checked'
   );
-  // 初始值固定為 false，實際狀態會在掛載後透過 useEffect 從 localStorage 還原
-  const [showDetails, setShowDetails] = useState(false);
+  // 初始值固定為 true，實際狀態會在掛載後透過 useEffect 從 localStorage 還原
+  const [showDetails, setShowDetails] = useState(true);
   // 控制是否已完成 client 端還原，避免先看到預設 UI 再跳到還原狀態
   const [hydrated, setHydrated] = useState(false);
   // 名單區塊模糊查詢關鍵字（依姓名）
@@ -46,6 +46,7 @@ export default function DashboardPage() {
   // 每頁顯示筆數
   const [pageSize, setPageSize] = useState<number>(5);
   const [currentPage, setCurrentPage] = useState(1);
+  const [hideLateInUnchecked, setHideLateInUnchecked] = useState(false);
   // 控制「回到頂部」按鈕的顯示
   const [showScrollTop, setShowScrollTop] = useState(false);
   // 追蹤展開詳細資料的項目（使用序號+姓名作為唯一識別）
@@ -112,6 +113,16 @@ export default function DashboardPage() {
       } else if (storedDetails === 'false') {
         setShowDetails(false);
       }
+
+      // 還原 pageSize
+      const pageSizeKey = `dashboard_page_size_${eventId}`;
+      const storedPageSize = window.localStorage.getItem(pageSizeKey);
+      if (storedPageSize !== null) {
+        const parsed = Number(storedPageSize);
+        if (!Number.isNaN(parsed)) {
+          setPageSize(parsed);
+        }
+      }
     } catch {
       // 讀取失敗時保持預設值
     }
@@ -162,6 +173,19 @@ export default function DashboardPage() {
     }
   }, [listMode, eventId, hydrated]);
 
+  // 將每頁顯示筆數 (pageSize) 存到瀏覽器，讓下次載入時沿用
+  useEffect(() => {
+    if (!hydrated) return; // 還沒還原前不要覆蓋 localStorage
+    try {
+      if (typeof window !== 'undefined') {
+        const storageKey = `dashboard_page_size_${eventId}`;
+        window.localStorage.setItem(storageKey, String(pageSize));
+      }
+    } catch (e) {
+      // 忽略 localStorage 寫入失敗
+    }
+  }, [pageSize, eventId, hydrated]);
+
   const total = attendees.length;
   const checked = attendees.filter((a) => a.已到 === 'TRUE').length;
   const cancelled = attendees.filter((a) => a.已到 === 'CANCELLED').length;
@@ -182,8 +206,19 @@ export default function DashboardPage() {
       return acc;
     }, {} as Record<string, number>);
 
+  const contactGroupStatsLate = attendees
+    .filter((a) => a.已到 === '晚到')
+    .reduce((acc, attendee) => {
+      const group = (attendee.聯絡組 && attendee.聯絡組.trim()) || '未分組';
+      if (!acc[group]) {
+        acc[group] = 0;
+      }
+      acc[group]++;
+      return acc;
+    }, {} as Record<string, number>);
+
   const contactGroupStatsUnchecked = attendees
-    .filter((a) => a.已到 !== 'TRUE' && a.已到 !== 'CANCELLED') // 未簽到的人（排除不會來）
+    .filter((a) => a.已到 !== 'TRUE' && a.已到 !== 'CANCELLED' && a.已到 !== '晚到') // 未簽到的人（排除不會來）
     .reduce((acc, attendee) => {
       const group = (attendee.聯絡組 && attendee.聯絡組.trim()) || '未分組';
       if (!acc[group]) {
@@ -205,17 +240,26 @@ export default function DashboardPage() {
   // 合併所有聯絡組（已簽到 + 未簽到）
   const allGroups = new Set([
     ...Object.keys(contactGroupStatsChecked),
+    ...Object.keys(contactGroupStatsLate),
     ...Object.keys(contactGroupStatsUnchecked),
   ]);
 
   const contactGroupArray = Array.from(allGroups)
-    .map((group) => ({
-      group,
-      checkedCount: contactGroupStatsChecked[group] || 0,
-      uncheckedCount: contactGroupStatsUnchecked[group] || 0,
-      totalCount: (contactGroupStatsChecked[group] || 0) + (contactGroupStatsUnchecked[group] || 0),
-      percentage: checked > 0 ? ((contactGroupStatsChecked[group] || 0) / checked) * 100 : 0,
-    }))
+    .map((group) => {
+      const checkedCount = contactGroupStatsChecked[group] || 0;
+      const lateCount = contactGroupStatsLate[group] || 0;
+      const uncheckedCount = contactGroupStatsUnchecked[group] || 0;
+      const totalCount = checkedCount + lateCount + uncheckedCount;
+      const percentage = totalCount > 0 ? (checkedCount / totalCount) * 100 : 0;
+      return {
+        group,
+        checkedCount,
+        lateCount,
+        uncheckedCount,
+        totalCount,
+        percentage,
+      };
+    })
     .sort((a, b) => b.checkedCount - a.checkedCount);
 
   const checkedList = attendees.filter((a) => a.已到 === 'TRUE');
@@ -249,6 +293,11 @@ export default function DashboardPage() {
 
   // 依搜尋關鍵字和組別過濾名單
   let detailList = rawDetailList;
+
+  // 尚未簽到名單：可選擇不顯示晚到
+  if (listMode === 'unchecked' && hideLateInUnchecked) {
+    detailList = detailList.filter((a) => a.已到 !== '晚到');
+  }
   
   // 先依姓名搜尋過濾
   if (searchQuery.trim().length > 0) {
@@ -282,7 +331,19 @@ export default function DashboardPage() {
     if (!identifier || !effectiveSheetId) return;
 
     const key = identifier;
-    setRowActionLoading(key + '-late');
+    const prevStatus = attendee.已到;
+    const action = prevStatus === '晚到' ? 'unset' : 'set';
+    setRowActionLoading(key + '-late-' + action);
+    const optimisticStatus = prevStatus === '晚到' ? '' : '晚到';
+    setAttendees((prev) =>
+      prev.map((a) => {
+        const aIdentifier = a.序號 || a.姓名;
+        if (aIdentifier === identifier) {
+          return { ...a, 已到: optimisticStatus };
+        }
+        return a;
+      })
+    );
     try {
       const response = await fetch('/api/manager/mark-late', {
         method: 'POST',
@@ -299,14 +360,41 @@ export default function DashboardPage() {
       });
       const data = await response.json();
       if (!data.success) {
-        console.error('Dashboard mark-late failed:', data.message);
+        throw new Error(data.message || '標記晚到失敗');
       }
+      if (typeof data.newStatus === 'string') {
+        setAttendees((prev) =>
+          prev.map((a) => {
+            const aIdentifier = a.序號 || a.姓名;
+            if (aIdentifier === identifier) {
+              return { ...a, 已到: data.newStatus };
+            }
+            return a;
+          })
+        );
+      }
+      setLastUpdated(
+        new Date().toLocaleTimeString('zh-TW', {
+          hour12: false,
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+        })
+      );
     } catch (error) {
       console.error('Dashboard mark-late error:', error);
+      setAttendees((prev) =>
+        prev.map((a) => {
+          const aIdentifier = a.序號 || a.姓名;
+          if (aIdentifier === identifier) {
+            return { ...a, 已到: prevStatus };
+          }
+          return a;
+        })
+      );
+      setError(error instanceof Error ? error.message : '標記晚到時發生錯誤');
     } finally {
       setRowActionLoading(null);
-      // 重新載入資料，確保儀表板統計與名單同步更新
-      fetchData();
     }
   };
 
@@ -514,6 +602,21 @@ export default function DashboardPage() {
                     清除篩選
                   </button>
                 </div>
+
+                {listMode === 'unchecked' && (
+                  <label className="inline-flex items-center gap-2 text-xs text-slate-200">
+                    <input
+                      type="checkbox"
+                      checked={hideLateInUnchecked}
+                      onChange={(e) => {
+                        setHideLateInUnchecked(e.target.checked);
+                        setCurrentPage(1);
+                      }}
+                      className="w-3 h-3 text-emerald-500 bg-slate-900 border-slate-600 focus:ring-emerald-500 focus:ring-2"
+                    />
+                    不顯示晚到
+                  </label>
+                )}
                 
                 {/* 聯絡組別 Radio Buttons */}
                 <div className="flex flex-wrap items-center gap-2">
@@ -630,12 +733,16 @@ export default function DashboardPage() {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className="h-6 px-2 text-[10px] border-slate-500 text-slate-200 bg-slate-800/70 hover:bg-slate-700/80"
+                                className={`h-6 px-2 text-[10px] border-slate-500 text-slate-200 bg-slate-800/70 hover:bg-slate-700/80 transition-all disabled:opacity-60 disabled:cursor-not-allowed ${
+                                  rowActionLoading?.startsWith((a.序號 || a.姓名) + '-late-')
+                                    ? 'opacity-60 animate-pulse'
+                                    : ''
+                                }`}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleMarkLate(a);
                                 }}
-                                disabled={rowActionLoading === (a.序號 || a.姓名) + '-late'}
+                                disabled={rowActionLoading?.startsWith((a.序號 || a.姓名) + '-late-')}
                               >
                                 {a.已到 === '晚到' ? '取消晚到' : '標記晚到'}
                               </Button>
@@ -911,6 +1018,7 @@ export default function DashboardPage() {
                       <span className="text-slate-200 font-medium">{item.group}</span>
                       <div className="text-slate-300 text-xs">
                         <span className="text-emerald-300 font-semibold">{item.checkedCount}</span> 已到 / 
+                        <span className="text-sky-300 font-semibold ml-1">{item.lateCount}</span> 晚到 /
                         <span className="text-red-300 font-semibold ml-1">{item.uncheckedCount}</span> 未到
                         <span className="text-slate-400 ml-2">({item.percentage.toFixed(1)}%)</span>
                       </div>
@@ -929,7 +1037,8 @@ export default function DashboardPage() {
               <p className="text-xs text-slate-300">
                 共有 <span className="font-semibold text-blue-300">{contactGroupArray.length}</span> 個聯絡組，
                 總計 <span className="font-semibold text-emerald-300">{checked}</span> 人已簽到、
-                <span className="font-semibold text-red-300">{unchecked}</span> 人未簽到
+                <span className="font-semibold text-sky-300">{lateCount}</span> 人晚到、
+                <span className="font-semibold text-red-300">{Math.max(unchecked - lateCount, 0)}</span> 人未簽到
               </p>
             </div>
           </CardContent>
