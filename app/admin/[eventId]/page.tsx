@@ -942,6 +942,11 @@ export default function AdminPage() {
                               <UserCheck className="w-3 h-3 mr-1" />
                               已簽到
                             </span>
+                          ) : attendee.已到 === '晚到' ? (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-sky-100 text-sky-800">
+                              <UserX className="w-3 h-3 mr-1" />
+                              晚到
+                            </span>
                           ) : attendee.已到 === 'CANCELLED' ? (
                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
                               <UserX className="w-3 h-3 mr-1" />

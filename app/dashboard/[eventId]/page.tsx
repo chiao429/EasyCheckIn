@@ -50,6 +50,7 @@ export default function DashboardPage() {
   const [showScrollTop, setShowScrollTop] = useState(false);
   // 追蹤展開詳細資料的項目（使用序號+姓名作為唯一識別）
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
+  const [rowActionLoading, setRowActionLoading] = useState<string | null>(null);
 
   const effectiveSheetId = sheetFromQuery || process.env.GOOGLE_SHEET_ID || eventId;
 
@@ -164,6 +165,7 @@ export default function DashboardPage() {
   const total = attendees.length;
   const checked = attendees.filter((a) => a.已到 === 'TRUE').length;
   const cancelled = attendees.filter((a) => a.已到 === 'CANCELLED').length;
+  const lateCount = attendees.filter((a) => a.已到 === '晚到').length;
   const unchecked = total - checked - cancelled;
   const effectiveTotalForRate = total - cancelled;
   const rate = effectiveTotalForRate > 0 ? (checked / effectiveTotalForRate) * 100 : 0;
@@ -273,6 +275,39 @@ export default function DashboardPage() {
   const handleChangeListMode = (mode: 'all' | 'checked' | 'cancelled' | 'unchecked') => {
     setListMode(mode);
     setCurrentPage(1);
+  };
+
+  const handleMarkLate = async (attendee: Attendee) => {
+    const identifier = attendee.序號 || attendee.姓名;
+    if (!identifier || !effectiveSheetId) return;
+
+    const key = identifier;
+    setRowActionLoading(key + '-late');
+    try {
+      const response = await fetch('/api/manager/mark-late', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sheetId: effectiveSheetId,
+          identifier,
+          eventId,
+          attendeeName: attendee.姓名,
+          operator: 'Dashboard',
+        }),
+      });
+      const data = await response.json();
+      if (!data.success) {
+        console.error('Dashboard mark-late failed:', data.message);
+      }
+    } catch (error) {
+      console.error('Dashboard mark-late error:', error);
+    } finally {
+      setRowActionLoading(null);
+      // 重新載入資料，確保儀表板統計與名單同步更新
+      fetchData();
+    }
   };
 
   // 在還沒完成 client 還原之前，不渲染內容，避免看到預設狀態閃一下
@@ -400,7 +435,9 @@ export default function DashboardPage() {
               <div className="text-5xl md:text-6xl font-extrabold text-red-100 text-right leading-tight">
                 {unchecked}
               </div>
-              <p className="text-xs text-red-200 mt-1">未簽到的人數</p>
+              <p className="text-xs text-red-200 mt-1">
+                未簽到 {Math.max(unchecked - lateCount, 0)} 人 / 晚到 {lateCount} 人
+              </p>
             </CardContent>
           </Card>
 
@@ -561,7 +598,13 @@ export default function DashboardPage() {
                               <span className="text-[11px] text-emerald-300">已簽到</span>
                             )}
                             {listMode === 'unchecked' && (
-                              <span className="text-[11px] text-slate-400">未簽到</span>
+                              <span className="text-[11px] font-semibold">
+                                {a.已到 === '晚到' ? (
+                                  <span className="text-sky-300">晚到</span>
+                                ) : (
+                                  <span className="text-slate-400">未簽到</span>
+                                )}
+                              </span>
                             )}
                             {listMode === 'cancelled' && (
                               <span className="text-[11px] text-amber-300">不會出席</span>
@@ -571,14 +614,33 @@ export default function DashboardPage() {
                                 {a.已到 === 'TRUE' && (
                                   <span className="text-emerald-300">已簽到</span>
                                 )}
+                                {a.已到 === '晚到' && (
+                                  <span className="text-sky-300">晚到</span>
+                                )}
                                 {a.已到 === 'CANCELLED' && (
                                   <span className="text-amber-300">不會出席</span>
                                 )}
-                                {a.已到 !== 'TRUE' && a.已到 !== 'CANCELLED' && (
+                                {a.已到 !== 'TRUE' && a.已到 !== 'CANCELLED' && a.已到 !== '晚到' && (
                                   <span className="text-slate-300">未簽到</span>
                                 )}
                               </span>
                             )}
+
+                            {a.已到 !== 'TRUE' && a.已到 !== 'CANCELLED' && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-6 px-2 text-[10px] border-slate-500 text-slate-200 bg-slate-800/70 hover:bg-slate-700/80"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleMarkLate(a);
+                                }}
+                                disabled={rowActionLoading === (a.序號 || a.姓名) + '-late'}
+                              >
+                                {a.已到 === '晚到' ? '取消晚到' : '標記晚到'}
+                              </Button>
+                            )}
+
                             <span className="text-slate-400 text-xs">
                               {isExpanded ? '▲' : '▼'}
                             </span>
@@ -593,7 +655,7 @@ export default function DashboardPage() {
                                 const hasValue = field.值 && field.值.trim().length > 0;
                                 const hasTitle = field.標題 && field.標題.trim().length > 0;
                                 if (!hasTitle && !hasValue) return null;
-                                
+
                                 return (
                                   <div key={fieldIdx} className="flex justify-between gap-2">
                                     <span className="text-slate-400">
@@ -816,7 +878,9 @@ export default function DashboardPage() {
                 </div>
                 <div className="flex items-center gap-1">
                   <span className="w-3 h-3 rounded-full bg-slate-400" />
-                  <span>尚未簽到人數：{unchecked}</span>
+                  <span>
+                    尚未簽到人數：{Math.max(unchecked - lateCount, 0)}（晚到 {lateCount}）
+                  </span>
                 </div>
                 <div className="flex items-center gap-1">
                   <span className="w-3 h-3 rounded-full bg-amber-300" />

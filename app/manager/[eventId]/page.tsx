@@ -257,6 +257,13 @@ export default function ManagerPage() {
         </span>
       );
     }
+    if (attendee.已到 === '晚到') {
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-sky-100 text-sky-800">
+          <UserX className="w-3 h-3 mr-1" /> 晚到（尚未簽到）
+        </span>
+      );
+    }
     if (attendee.已到 === 'CANCELLED') {
       return (
         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">

@@ -616,6 +616,8 @@ export async function logManagerAction(params: {
     | 'cancel_checkin_failed'
     | 'mark_cancelled'
     | 'mark_cancelled_failed'
+    | 'mark_late'
+    | 'mark_late_failed'
     | 'toggle_contact'
     | 'toggle_contact_failed'
     | 'admin_login'
@@ -704,6 +706,10 @@ export async function logManagerAction(params: {
           return '標記不會來-成功';
         case 'mark_cancelled_failed':
           return '標記不會來-失敗';
+        case 'mark_late':
+          return '標記晚到-成功';
+        case 'mark_late_failed':
+          return '標記晚到-失敗';
         case 'admin_login':
           return '後台登入-成功';
         case 'system_error':
