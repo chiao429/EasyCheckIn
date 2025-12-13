@@ -40,6 +40,7 @@ export default function KidsDashboardPage() {
   const [showContactedInUnchecked, setShowContactedInUnchecked] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState<number>(5);
+  const [selectedSquad, setSelectedSquad] = useState<string>('all');
   // 追蹤展開詳細資料的項目（使用序號+姓名作為唯一識別）
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
 
@@ -116,6 +117,12 @@ export default function KidsDashboardPage() {
           setPageSize(parsed);
         }
       }
+
+      const squadKey = `kids_dashboard_selected_squad_${eventId}`;
+      const storedSquad = window.localStorage.getItem(squadKey);
+      if (storedSquad && storedSquad.trim().length > 0) {
+        setSelectedSquad(storedSquad);
+      }
     } catch {
       // ignore
     }
@@ -164,28 +171,61 @@ export default function KidsDashboardPage() {
     }
   }, [pageSize, eventId, hydrated]);
 
-  const total = attendees.length;
-  const checked = attendees.filter((a) => a.已到 === 'TRUE').length;
-  const cancelled = attendees.filter((a) => a.已到 === 'CANCELLED').length;
+  useEffect(() => {
+    if (!hydrated) return;
+    try {
+      if (typeof window !== 'undefined') {
+        const storageKey = `kids_dashboard_selected_squad_${eventId}`;
+        window.localStorage.setItem(storageKey, selectedSquad);
+      }
+    } catch {
+      // ignore
+    }
+  }, [selectedSquad, eventId, hydrated]);
+
+  const getSquadValue = (a: Attendee) => {
+    const fields = a.詳細欄位 || [];
+    const byTitle = fields.find((f) => (f.標題 || '').toString().includes('小隊'));
+    const raw = (byTitle?.值 ?? fields[0]?.值 ?? '').toString().trim();
+    return raw;
+  };
+
+  const squadOptions = Array.from(
+    new Set(
+      attendees
+        .map((a) => getSquadValue(a))
+        .map((v) => v.trim())
+        .filter((v) => v.length > 0)
+    )
+  ).sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+
+  const attendeesBySquad =
+    selectedSquad === 'all'
+      ? attendees
+      : attendees.filter((a) => getSquadValue(a) === selectedSquad);
+
+  const total = attendeesBySquad.length;
+  const checked = attendeesBySquad.filter((a) => a.已到 === 'TRUE').length;
+  const cancelled = attendeesBySquad.filter((a) => a.已到 === 'CANCELLED').length;
   const unchecked = total - checked - cancelled;
   const effectiveTotalForRate = total - cancelled;
   const rate = effectiveTotalForRate > 0 ? (checked / effectiveTotalForRate) * 100 : 0;
 
-  const contacted = attendees.filter(
+  const contacted = attendeesBySquad.filter(
     (a) => a.已到 !== 'TRUE' && a.已到 !== 'CANCELLED' && a.需要聯繫 === 'TRUE'
   ).length;
-  const uncontacted = attendees.filter(
+  const uncontacted = attendeesBySquad.filter(
     (a) => a.已到 !== 'TRUE' && a.已到 !== 'CANCELLED' && a.需要聯繫 !== 'TRUE'
   ).length;
 
-  const checkedList = attendees.filter((a) => a.已到 === 'TRUE');
-  const cancelledList = attendees.filter((a) => a.已到 === 'CANCELLED');
-  const uncheckedList = attendees.filter((a) => a.已到 !== 'TRUE' && a.已到 !== 'CANCELLED');
+  const checkedList = attendeesBySquad.filter((a) => a.已到 === 'TRUE');
+  const cancelledList = attendeesBySquad.filter((a) => a.已到 === 'CANCELLED');
+  const uncheckedList = attendeesBySquad.filter((a) => a.已到 !== 'TRUE' && a.已到 !== 'CANCELLED');
 
   const getDetailList = () => {
     switch (listMode) {
       case 'all':
-        return attendees;
+        return attendeesBySquad;
       case 'checked':
         return checkedList;
       case 'cancelled':
@@ -239,6 +279,25 @@ export default function KidsDashboardPage() {
           </div>
           <div className="flex flex-col items-end gap-2">
             <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-slate-300">小隊</span>
+                <select
+                  value={selectedSquad}
+                  onChange={(e) => {
+                    setSelectedSquad(e.target.value);
+                    setCurrentPage(1);
+                    setExpandedItem(null);
+                  }}
+                  className="h-8 rounded-md border border-slate-600 bg-slate-800 px-2 text-[12px] text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="all">全部</option>
+                  {squadOptions.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <Button
                 variant="outline"
                 size="sm"
