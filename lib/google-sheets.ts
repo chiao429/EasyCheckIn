@@ -1159,23 +1159,6 @@ export async function getKidsSchedule(sheetId: string): Promise<Record<string, S
 
 // ───────── 兒童版：小隊長頁（/kids-squad） ─────────
 
-const squadPasswordCache: { value: string | null; fetchedAt: number } = { value: null, fetchedAt: 0 };
-
-/** 小隊長密碼：活動設定試算表 資訊!B2（後台密碼在 A2）；60 秒快取 */
-export async function getSquadPassword(): Promise<string | null> {
-  if (Date.now() - squadPasswordCache.fetchedAt < 60_000) return squadPasswordCache.value;
-  const configSheetId = process.env.GOOGLE_EVENT_CONFIG_SHEET_ID;
-  if (!configSheetId) return null;
-  const response = await getGoogleSheetsClient().spreadsheets.values.get({
-    spreadsheetId: configSheetId,
-    range: '資訊!B2:B2',
-  });
-  const value = (response.data.values?.[0]?.[0] ?? '').toString().trim() || null;
-  squadPasswordCache.value = value;
-  squadPasswordCache.fetchedAt = Date.now();
-  return value;
-}
-
 export interface SquadKid {
   rowIndex: number;
   序號: string;

@@ -1,18 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getKidsBySquad, getKidsSchedule, getSquadPassword } from '@/lib/google-sheets';
-import { verifySquadToken } from '@/lib/squad-auth';
+import { getKidsBySquad, getKidsSchedule } from '@/lib/google-sheets';
 
 export const dynamic = 'force-dynamic';
 
-// 小隊長頁：只回傳指定小隊的名單與時間表；需要登入憑證
+// 小隊長頁：只回傳指定小隊的名單與時間表
 export async function GET(request: NextRequest) {
   try {
-    const token = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
-    const password = await getSquadPassword();
-    if (!password || !verifySquadToken(token, password)) {
-      return NextResponse.json({ success: false, message: '請重新輸入小隊長密碼' }, { status: 401 });
-    }
-
     const sheetId = request.nextUrl.searchParams.get('sheetId');
     const squad = (request.nextUrl.searchParams.get('squad') || '').trim().toUpperCase();
     if (!sheetId) {

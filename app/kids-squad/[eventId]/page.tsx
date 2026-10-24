@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { SiteFooter } from '@/components/SiteFooter';
 import { CheckInResultDialog, type CheckInInfo } from '@/components/CheckInDialogs';
-import { Ban, Lock, LogOut, MapPin, Phone, RefreshCw, UserCheck, UserX, Users } from 'lucide-react';
+import { Ban, MapPin, Phone, RefreshCw, UserCheck, UserX, Users } from 'lucide-react';
 
 interface SquadKid {
   rowIndex: number;
@@ -33,7 +33,6 @@ interface ScheduleItem {
 type Filter = 'all' | 'pending' | 'arrived' | 'absent';
 
 const REFRESH_MS = 30_000;
-const TOKEN_KEY = 'easycheck_kids_squad_token';
 
 const toMinutes = (hhmm: string) => {
   const [h, m] = hhmm.split(':').map((v) => parseInt(v, 10));
@@ -48,12 +47,10 @@ export default function KidsSquadPage() {
   const settingsKey = `easycheck_kids_squad:${eventId}`;
 
   const [ready, setReady] = useState(false);
-  const [token, setToken] = useState('');
   const [squad, setSquad] = useState('');
   const [leader, setLeader] = useState('');
 
-  // 登入與設定表單
-  const [password, setPassword] = useState('');
+  // 設定表單
   const [squadOptions, setSquadOptions] = useState<string[]>([]);
   const [draftSquad, setDraftSquad] = useState('');
   const [draftLeader, setDraftLeader] = useState('');
@@ -73,7 +70,6 @@ export default function KidsSquadPage() {
   // 讀取這台裝置記住的登入與小隊
   useEffect(() => {
     try {
-      setToken(window.localStorage.getItem(TOKEN_KEY) || '');
       const saved = JSON.parse(window.localStorage.getItem(settingsKey) || 'null');
       if (saved?.squad) setSquad(saved.squad);
       if (saved?.leader) setLeader(saved.leader);
@@ -84,36 +80,19 @@ export default function KidsSquadPage() {
     setReady(true);
   }, [settingsKey]);
 
-  const logout = (msg?: string) => {
-    try {
-      window.localStorage.removeItem(TOKEN_KEY);
-    } catch {
-      // 略過
-    }
-    setToken('');
-    setKids([]);
-    setError(msg ?? null);
-  };
-
   const fetchRoster = useCallback(
     async (targetSquad: string) => {
       const response = await fetch(
         `/api/kids/squad/roster?sheetId=${encodeURIComponent(sheetId)}&squad=${encodeURIComponent(targetSquad)}`,
-        { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' }
+        { cache: 'no-store' }
       );
-      const data = await response.json();
-      if (response.status === 401) {
-        logout(data.message);
-        return null;
-      }
-      return data;
+      return response.json();
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [sheetId, token]
+    [sheetId]
   );
 
   const load = useCallback(async () => {
-    if (!token || !squad) return;
+    if (!squad) return;
     setLoading(true);
     try {
       const data = await fetchRoster(squad);
@@ -132,47 +111,22 @@ export default function KidsSquadPage() {
     } finally {
       setLoading(false);
     }
-  }, [fetchRoster, token, squad]);
+  }, [fetchRoster, squad]);
 
   useEffect(() => {
     void load();
-    if (!token || !squad) return;
+    if (!squad) return;
     const t = setInterval(() => void load(), REFRESH_MS);
     return () => clearInterval(t);
-  }, [load, token, squad]);
+  }, [load, squad]);
 
-  // 登入後、尚未選小隊：載入小隊清單
+  // 尚未選小隊：載入小隊清單
   useEffect(() => {
-    if (!token || squad) return;
+    if (squad) return;
     fetchRoster('')
       .then((data) => data?.success && setSquadOptions(data.data.squads || []))
       .catch(() => setError('網路錯誤，請檢查連線後再試'));
-  }, [token, squad, fetchRoster]);
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setLoading(true);
-    try {
-      const response = await fetch('/api/kids/squad/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
-      });
-      const data = await response.json();
-      if (!data.success) {
-        setError(data.message || '登入失敗');
-        return;
-      }
-      window.localStorage.setItem(TOKEN_KEY, data.token);
-      setToken(data.token);
-      setPassword('');
-    } catch {
-      setError('網路錯誤，請檢查連線後再試');
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [squad, fetchRoster]);
 
   const saveSettings = (e: React.FormEvent) => {
     e.preventDefault();
@@ -312,37 +266,7 @@ export default function KidsSquadPage() {
 
   if (!ready) return shell(null);
 
-  // 步驟 1：輸入小隊長密碼
-  if (!token) {
-    return shell(
-      <Card className="shadow-md">
-        <CardHeader className="px-4 sm:px-6">
-          <CardTitle className="flex items-center gap-2 text-xl sm:text-2xl">
-            <Lock className="h-5 w-5" /> 小隊長頁
-          </CardTitle>
-          <CardDescription>請輸入小隊長密碼。登入後這台裝置會記住 3 天。</CardDescription>
-        </CardHeader>
-        <CardContent className="px-4 sm:px-6">
-          <form onSubmit={handleLogin} className="space-y-3">
-            <Input
-              type="password"
-              autoComplete="current-password"
-              placeholder="小隊長密碼"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoFocus
-            />
-            {error && <p className="text-sm text-rose-700">{error}</p>}
-            <Button type="submit" className="h-11 w-full" disabled={loading || !password}>
-              {loading ? '確認中…' : '進入'}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  // 步驟 2：選擇自己的小隊
+  // 步驟 1：選擇自己的小隊
   if (!squad) {
     return shell(
       <Card className="shadow-md">
@@ -377,16 +301,13 @@ export default function KidsSquadPage() {
             <Button type="submit" className="h-11 w-full" disabled={!draftSquad || !draftLeader.trim()}>
               開始
             </Button>
-            <button type="button" className="w-full text-center text-sm text-slate-500 underline" onClick={() => logout()}>
-              登出
-            </button>
           </form>
         </CardContent>
       </Card>
     );
   }
 
-  // 步驟 3：小隊狀況與操作
+  // 步驟 2：小隊狀況與操作
   const filters: { key: Filter; label: string; n: number }[] = [
     { key: 'all', label: '全部', n: counts.total },
     { key: 'pending', label: '未報到', n: counts.pending },
@@ -405,14 +326,9 @@ export default function KidsSquadPage() {
               </CardTitle>
               <CardDescription>小隊長：{leader}</CardDescription>
             </div>
-            <div className="flex shrink-0 flex-col items-end gap-1">
-              <Button variant="outline" size="sm" onClick={changeSquad}>
-                切換小隊
-              </Button>
-              <button type="button" className="inline-flex items-center text-xs text-slate-500" onClick={() => logout()}>
-                <LogOut className="mr-1 h-3 w-3" /> 登出
-              </button>
-            </div>
+            <Button variant="outline" size="sm" className="shrink-0" onClick={changeSquad}>
+              切換小隊
+            </Button>
           </div>
         </CardHeader>
         <CardContent className="space-y-3 px-4 sm:px-6">

@@ -292,7 +292,7 @@ export default function KidsHomePage() {
 
                       <div className="p-3 bg-sky-50 rounded-lg border border-sky-200">
                         <div className="flex items-center justify-between mb-1">
-                          <p className="text-xs font-medium text-sky-900">小隊長頁（kids-squad，需小隊長密碼）</p>
+                          <p className="text-xs font-medium text-sky-900">小隊長頁（kids-squad）</p>
                           {squadUrl && (
                             <button
                               type="button"
@@ -313,7 +313,7 @@ export default function KidsHomePage() {
                           <ExternalLink className="w-3 h-3 ml-1 shrink-0" />
                         </a>
                         <p className="text-[11px] text-sky-700 mt-1">
-                          小隊長只看自己小隊：出席狀況、目前位置、報到與聯繫（密碼在活動設定表「資訊」B2）
+                          小隊長選擇自己的小隊後，只看該隊：出席狀況、目前位置、報到與聯繫
                         </p>
                       </div>
 
