@@ -1,12 +1,20 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { SiteFooter } from '@/components/SiteFooter';
 import { CheckCircle2, XCircle, Loader2, UserCheck } from 'lucide-react';
+
+interface CheckInData {
+  序號: string;
+  姓名: string;
+  到達時間: string;
+  已到?: string;
+  詳細欄位?: { 標題: string; 值: string }[];
+}
 
 export default function CheckInPage() {
   const params = useParams();
@@ -21,6 +29,23 @@ export default function CheckInPage() {
     message: string;
     data?: any;
   } | null>(null);
+  // 報到成功後彈出的報名資訊視窗
+  const [popup, setPopup] = useState<CheckInData | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const closePopup = () => {
+    setPopup(null);
+    setTimeout(() => inputRef.current?.focus(), 0);
+  };
+
+  useEffect(() => {
+    if (!popup) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' || e.key === 'Enter') closePopup();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [popup]);
 
   const handleCheckIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,6 +78,7 @@ export default function CheckInPage() {
       
       if (data.success) {
         setIdentifier('');
+        if (data.data) setPopup(data.data as CheckInData);
       }
     } catch (error) {
       setResult({
@@ -81,6 +107,7 @@ export default function CheckInPage() {
           <form onSubmit={handleCheckIn} className="space-y-4">
             <div className="space-y-2">
               <Input
+                ref={inputRef}
                 type="text"
                 placeholder="請輸入您的姓名"
                 value={identifier}
@@ -148,6 +175,52 @@ export default function CheckInPage() {
         </CardContent>
       </Card>
       <SiteFooter />
+
+      {popup && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={closePopup}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="checkin-popup-title"
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex flex-col items-center text-center">
+              <CheckCircle2 className="h-14 w-14 text-green-600" />
+              <p id="checkin-popup-title" className="mt-2 text-lg font-semibold text-green-700">
+                簽到成功
+              </p>
+              <p className="mt-1 text-3xl font-bold text-gray-900">{popup.姓名}</p>
+            </div>
+
+            <dl className="mt-5 space-y-2 rounded-lg bg-gray-50 p-4 text-sm">
+              <div className="flex justify-between gap-4">
+                <dt className="text-gray-500">序號</dt>
+                <dd className="font-medium text-gray-900">{popup.序號 || '—'}</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-gray-500">報到時間</dt>
+                <dd className="font-medium text-gray-900">{popup.到達時間}</dd>
+              </div>
+              {popup.詳細欄位
+                ?.filter((f) => f.值.trim() !== '')
+                .map((f) => (
+                  <div key={f.標題} className="flex justify-between gap-4">
+                    <dt className="shrink-0 text-gray-500">{f.標題}</dt>
+                    <dd className="text-right font-medium text-gray-900">{f.值}</dd>
+                  </div>
+                ))}
+            </dl>
+
+            <Button className="mt-5 h-12 w-full text-lg" onClick={closePopup} autoFocus>
+              確定
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

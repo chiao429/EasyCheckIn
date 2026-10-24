@@ -142,13 +142,20 @@ export async function checkIn(
   const sheets = getGoogleSheetsClient();
 
   try {
-    // 取得所有資料
+    // 取得所有資料（含標題列與 E~I 詳細欄位，供報到成功後顯示報名資訊）
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: sheetId,
-      range: 'A2:D',
+      range: 'A1:I',
     });
 
-    const rows = response.data.values || [];
+    const allRows = response.data.values || [];
+    const headerRow = allRows[0] || [];
+    const rows = allRows.slice(1);
+    const detailsOf = (row: any[]): DetailField[] =>
+      headerRow
+        .slice(4, 9)
+        .map((h, idx) => ({ 標題: (h || '').toString(), 值: (row[4 + idx] ?? '').toString() }))
+        .filter((f) => f.標題.trim() !== '');
     
     // 尋找符合的序號或姓名
     let rowIndex = -1;
@@ -177,6 +184,7 @@ export async function checkIn(
           姓名: rows[rowIndex][1],
           到達時間: rows[rowIndex][2],
           已到: rows[rowIndex][3],
+          詳細欄位: detailsOf(rows[rowIndex]),
         },
       };
     }
@@ -210,6 +218,7 @@ export async function checkIn(
         姓名: rows[rowIndex][1],
         到達時間: now,
         已到: 'TRUE',
+        詳細欄位: detailsOf(rows[rowIndex]),
       },
     };
   } catch (error) {
