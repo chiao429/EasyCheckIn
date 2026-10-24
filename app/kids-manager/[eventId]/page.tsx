@@ -126,22 +126,34 @@ export default function KidsManagerPage() {
     return (first?.值 || '').toString().trim();
   };
 
+  // 小隊時間表：優先讀活動試算表的「小隊時間表」分頁，沒有分頁時用 public/groupSchedule.json
+  // 快取 30 秒，試算表修改後很快就會生效
+  const [scheduleLoadedAt, setScheduleLoadedAt] = useState(0);
   const loadSquadScheduleIfNeeded = async () => {
-    if (squadSchedule) return squadSchedule;
+    if (squadSchedule && Date.now() - scheduleLoadedAt < 30_000) return squadSchedule;
     setSquadLookupLoading(true);
     setSquadLookupError(null);
     try {
-      const response = await fetch('/groupSchedule.json');
-      if (!response.ok) {
-        throw new Error(`讀取小隊地點資料失敗（HTTP ${response.status}）`);
+      const response = await fetch(`/api/kids/schedule?sheetId=${encodeURIComponent(effectiveSheetId)}`);
+      const result = await response.json();
+      if (!result.success) {
+        throw new Error(result.message || `讀取小隊地點資料失敗（HTTP ${response.status}）`);
       }
-      const data = (await response.json()) as SquadScheduleMap;
+      let data = result.data as SquadScheduleMap | null;
+      if (result.source === 'file') {
+        const fileResponse = await fetch('/groupSchedule.json');
+        if (!fileResponse.ok) throw new Error(`讀取小隊地點資料失敗（HTTP ${fileResponse.status}）`);
+        data = (await fileResponse.json()) as SquadScheduleMap;
+      }
       setSquadSchedule(data);
+      setScheduleLoadedAt(Date.now());
       return data;
     } catch (error) {
       console.error('Load squad schedule error:', error);
-      setSquadLookupError('讀取小隊地點資料失敗，請確認 groupSchedule.json 是否存在且格式正確');
-      return null;
+      setSquadLookupError(
+        error instanceof Error && error.message ? error.message : '讀取小隊地點資料失敗，請確認「小隊時間表」分頁格式正確'
+      );
+      return squadSchedule;
     } finally {
       setSquadLookupLoading(false);
     }

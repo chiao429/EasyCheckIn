@@ -1049,3 +1049,85 @@ export function invalidateKidsCache(sheetId: string) {
   kidsSheetCache.delete(sheetId);
   kidsFullSheetCache.delete(sheetId);
 }
+
+// ───────── 兒童版：小隊時間表（活動試算表的「小隊時間表」分頁） ─────────
+
+export const KIDS_SCHEDULE_TAB = '小隊時間表';
+
+export interface SquadScheduleItem {
+  area: string;
+  time: string;
+  place: string;
+}
+
+const kidsScheduleCache = new Map<string, { data: Record<string, SquadScheduleItem[]> | null; fetchedAt: number }>();
+const KIDS_SCHEDULE_CACHE_TTL_MS = 30_000;
+
+/** "9:41"、"09:41:00"、"下午 1:30" → "9:41"、"13:30"；無法辨識回傳空字串 */
+function normalizeClock(value: unknown): string {
+  const s = (value ?? '').toString().trim();
+  const m = s.match(/(\d{1,2})[:：](\d{2})/);
+  if (!m) return '';
+  let h = parseInt(m[1], 10);
+  if (/下午|PM/i.test(s) && h < 12) h += 12;
+  if (/上午|AM/i.test(s) && h === 12) h = 0;
+  return `${h}:${m[2]}`;
+}
+
+/**
+ * 讀取小隊時間表，回傳 { 小隊代碼: [{ area, time: "9:41-9:56", place }] }。
+ * 依標題名稱對應欄位（小隊、區域、開始、結束、地點），欄位順序可自由調整。
+ * 分頁不存在時回傳 null（頁面會改用 public/groupSchedule.json）。
+ */
+export async function getKidsSchedule(sheetId: string): Promise<Record<string, SquadScheduleItem[]> | null> {
+  const cached = kidsScheduleCache.get(sheetId);
+  if (cached && Date.now() - cached.fetchedAt < KIDS_SCHEDULE_CACHE_TTL_MS) return cached.data;
+
+  const sheets = getGoogleSheetsClient();
+  let values: any[][];
+  try {
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: sheetId,
+      range: `'${KIDS_SCHEDULE_TAB}'!A1:Z`,
+    });
+    values = response.data.values || [];
+  } catch (error: any) {
+    // 分頁不存在：Google 回傳 400 Unable to parse range
+    const status = error?.code || error?.response?.status;
+    if (status === 400) {
+      kidsScheduleCache.set(sheetId, { data: null, fetchedAt: Date.now() });
+      return null;
+    }
+    throw error;
+  }
+
+  const header = (values[0] || []).map((h) => (h || '').toString().trim());
+  const col = (name: string) => header.indexOf(name);
+  const [cTeam, cArea, cStart, cEnd, cPlace] = ['小隊', '區域', '開始', '結束', '地點'].map(col);
+  if (cTeam === -1 || cStart === -1 || cEnd === -1) {
+    throw new Error(`「${KIDS_SCHEDULE_TAB}」分頁缺少必要欄位：小隊、開始、結束`);
+  }
+
+  const data: Record<string, SquadScheduleItem[]> = {};
+  for (const row of values.slice(1)) {
+    const team = (row[cTeam] || '').toString().trim().toUpperCase();
+    const start = normalizeClock(row[cStart]);
+    const end = normalizeClock(row[cEnd]);
+    if (!team || !start || !end) continue;
+    (data[team] ??= []).push({
+      area: cArea === -1 ? '' : (row[cArea] || '').toString().trim(),
+      time: `${start}-${end}`,
+      place: cPlace === -1 ? '' : (row[cPlace] || '').toString().trim(),
+    });
+  }
+  for (const list of Object.values(data)) {
+    const minutes = (t: string) => {
+      const [h, m] = t.split('-')[0].split(':').map(Number);
+      return h * 60 + m;
+    };
+    list.sort((a, b) => minutes(a.time) - minutes(b.time));
+  }
+
+  kidsScheduleCache.set(sheetId, { data, fetchedAt: Date.now() });
+  return data;
+}
