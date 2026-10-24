@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,7 +12,7 @@ import {
   type CheckInInfo,
   type FamilyCandidate,
 } from '@/components/CheckInDialogs';
-import { Search, UserCheck, UserX, Ban, MapPin } from 'lucide-react';
+import { Search, UserCheck, UserX, Ban, MapPin, Eraser } from 'lucide-react';
 
 interface KidsDetailField {
   標題: string;
@@ -58,6 +58,9 @@ export default function KidsManagerPage() {
   const [family, setFamily] = useState<FamilyCandidate[] | null>(null);
   const [picked, setPicked] = useState<Set<number>>(new Set());
   const closePopup = useCallback(() => setPopup(null), []);
+  // 同一戶（家長電話相同）的所有報名資料
+  const [household, setHousehold] = useState<Attendee[]>([]);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const [squadSchedule, setSquadSchedule] = useState<SquadScheduleMap | null>(null);
   const [squadLookupLoading, setSquadLookupLoading] = useState(false);
@@ -162,26 +165,82 @@ export default function KidsManagerPage() {
     return nowMin >= startMin && nowMin <= endMin;
   };
 
-  // 代為報到：先查同一家長電話的兄弟姊妹，有的話讓工作人員勾選一起報到
+  // 清空搜尋，準備下一筆
+  const resetSearch = () => {
+    setKeyword('');
+    setResults([]);
+    setSelected(null);
+    setHousehold([]);
+    setShowDetails(false);
+    setSquadLookupResult(null);
+    setSquadLookupError(null);
+    setTimeout(() => searchInputRef.current?.focus(), 0);
+  };
+
+  type FamilyApiMember = {
+    rowIndex: number;
+    序號: string;
+    姓名: string;
+    已到: string;
+    到達時間: string;
+    小隊: string;
+    詳細欄位: KidsDetailField[];
+  };
+
+  const fetchHousehold = async (rowIndex: number): Promise<Attendee[]> => {
+    const res = await fetch('/api/kids/family', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sheetId: effectiveSheetId, rowIndex }),
+    });
+    const data = await res.json();
+    if (!data.success || data.data.others.length === 0) return [];
+    return ([data.data.main, ...data.data.others] as FamilyApiMember[])
+      .map(({ 小隊: _小隊, ...m }) => m)
+      .sort((a, b) => (Number(a.序號) || 0) - (Number(b.序號) || 0));
+  };
+
+  // 選到某位兒童時，載入同一戶的所有報名資料
+  useEffect(() => {
+    const rowIndex = selected?.rowIndex;
+    if (typeof rowIndex !== 'number' || !effectiveSheetId) {
+      setHousehold([]);
+      return;
+    }
+    if (household.some((h) => h.rowIndex === rowIndex)) return;
+    let cancelled = false;
+    fetchHousehold(rowIndex)
+      .then((list) => !cancelled && setHousehold(list))
+      .catch((error) => console.error('Kids household lookup error:', error));
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected?.rowIndex, effectiveSheetId]);
+
+  // 代為報到：同一戶有其他兄弟姊妹時讓工作人員勾選一起報到
   const handleManagerCheckIn = async () => {
     if (!selected || !effectiveSheetId) return;
+    if (selected.已到 === 'TRUE') {
+      setMessage(`❌ ${selected.姓名} 已於 ${selected.到達時間} 報到，不可重複報到`);
+      return;
+    }
     if (typeof selected.rowIndex === 'number') {
       setActionLoading(true);
       setMessage(null);
       try {
-        const res = await fetch('/api/kids/family', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sheetId: effectiveSheetId, rowIndex: selected.rowIndex }),
-        });
-        const data = await res.json();
-        if (data.success && data.data.others.length > 0) {
-          const list: FamilyCandidate[] = [data.data.main, ...data.data.others].map(
-            (m: { rowIndex: number; 序號: string; 姓名: string; 已到: string; 到達時間: string; 小隊: string }) => ({
-              ...m,
-              備註: m.小隊 ? `小隊 ${m.小隊}` : undefined,
-            })
-          );
+        const members = household.some((h) => h.rowIndex === selected.rowIndex)
+          ? household
+          : await fetchHousehold(selected.rowIndex);
+        if (members.length > 1) {
+          const list: FamilyCandidate[] = members.map((m) => ({
+            rowIndex: m.rowIndex as number,
+            序號: m.序號,
+            姓名: m.姓名,
+            已到: m.已到,
+            到達時間: m.到達時間,
+            備註: m.詳細欄位?.[0]?.值 ? `小隊 ${m.詳細欄位[0].值}` : undefined,
+          }));
           setFamily(list);
           setPicked(new Set(list.filter((m) => m.已到 !== 'TRUE').map((m) => m.rowIndex)));
           setActionLoading(false);
@@ -213,7 +272,7 @@ export default function KidsManagerPage() {
       if (data.success) {
         setMessage(`✅ 已由工作人員代為報到 ${data.data.length} 位（兒童）${skippedText ? `；${skippedText}` : ''}`);
         setPopup(data.data as CheckInInfo[]);
-        await refreshSelected(selected.序號 || selected.姓名);
+        resetSearch();
       } else {
         setMessage(`❌ 報到失敗：${data.message || '未知錯誤'}`);
       }
@@ -256,7 +315,7 @@ export default function KidsManagerPage() {
             詳細欄位: selected.詳細欄位,
           },
         ]);
-        await refreshSelected(selected.序號 || selected.姓名);
+        resetSearch();
       } else {
         setMessage(`❌ 報到失敗：${data.message || '未知錯誤'}`);
       }
@@ -389,6 +448,9 @@ export default function KidsManagerPage() {
       if (data.success && data.data && data.data.length > 0) {
         setSelected(data.data[0]);
         setShowDetails(false);
+        if (typeof data.data[0].rowIndex === 'number') {
+          setHousehold(await fetchHousehold(data.data[0].rowIndex));
+        }
       }
     } catch (error) {
       console.error('Kids manager refresh selected error:', error);
@@ -452,6 +514,7 @@ export default function KidsManagerPage() {
                   <label className="text-sm font-medium">搜尋序號或兒童姓名</label>
                   <div className="flex gap-2">
                     <Input
+                      ref={searchInputRef}
                       placeholder="請輸入報名序號或姓名"
                       value={keyword}
                       onChange={(e) => setKeyword(e.target.value)}
@@ -460,6 +523,17 @@ export default function KidsManagerPage() {
                     <Button onClick={handleSearch} disabled={loading}>
                       <Search className="w-4 h-4 mr-1" />
                       {loading ? '搜尋中...' : '搜尋'}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        resetSearch();
+                        setMessage(null);
+                      }}
+                      disabled={loading || actionLoading}
+                    >
+                      <Eraser className="w-4 h-4 mr-1" />
+                      清空
                     </Button>
                   </div>
                   <div className="text-xs text-slate-600 space-y-0.5 pl-1">
@@ -617,6 +691,36 @@ export default function KidsManagerPage() {
                         })}
                       </div>
                     )}
+                  </div>
+                )}
+
+                {staffName.trim() && selected && household.length > 1 && (
+                  <div className="space-y-2">
+                    <p className="text-xs text-slate-600">同一戶的報名資料（{household.length} 筆，點選可切換）：</p>
+                    <div className="border rounded-md divide-y bg-white">
+                      {household.map((attendee) => (
+                        <button
+                          key={attendee.rowIndex}
+                          type="button"
+                          className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center justify-between ${
+                            selected.rowIndex === attendee.rowIndex ? 'bg-slate-100' : ''
+                          }`}
+                          onClick={() => {
+                            setSelected(attendee);
+                            setShowDetails(false);
+                          }}
+                        >
+                          <span>
+                            <span className="font-medium mr-2">{attendee.序號}</span>
+                            <span>{attendee.姓名}</span>
+                            {attendee.詳細欄位?.[0]?.值 && (
+                              <span className="ml-2 text-xs text-slate-500">{attendee.詳細欄位[0].值}</span>
+                            )}
+                          </span>
+                          {getStatusLabel(attendee)}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
 

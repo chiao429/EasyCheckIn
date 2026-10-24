@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getGoogleSheetsClient, logManagerAction } from '@/lib/google-sheets';
+import { getGoogleSheetsClient, logManagerAction, invalidateKidsCache } from '@/lib/google-sheets';
 
 export async function POST(request: NextRequest) {
   try {
@@ -67,6 +67,7 @@ export async function POST(request: NextRequest) {
         values: [['CANCELLED', '']],
       },
     });
+    invalidateKidsCache(sheetId);
 
     await logManagerAction({
       eventId,

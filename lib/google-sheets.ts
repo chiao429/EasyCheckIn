@@ -609,6 +609,24 @@ export async function checkInKids(
   try {
     if (typeof rowIndex === 'number' && rowIndex >= 2) {
       const targetRowNumber = rowIndex;
+      // 寫入前重新讀取該列：已報到不得重複報到；列內容與序號/姓名不符時（列被移動）拒絕寫入
+      const current = await sheets.spreadsheets.values.get({
+        spreadsheetId: sheetId,
+        range: `A${targetRowNumber}:F${targetRowNumber}`,
+      });
+      const currentRow = current.data.values?.[0] || [];
+      const currentSerial = (currentRow[4] || '').toString();
+      const currentName = (currentRow[5] || '').toString();
+      if (identifier && identifier !== currentSerial && identifier !== currentName) {
+        return { success: false, message: '資料已變動，請重新搜尋後再報到' };
+      }
+      if ((currentRow[0] || '').toString() === 'TRUE') {
+        return {
+          success: false,
+          message: `此兒童已於 ${(currentRow[1] || '').toString()} 報到過，不可重複報到`,
+          data: { 序號: currentSerial, 姓名: currentName, 到達時間: (currentRow[1] || '').toString(), 已到: 'TRUE' },
+        };
+      }
       const now = new Date().toLocaleString('zh-TW', {
         timeZone: 'Asia/Taipei',
         year: 'numeric',
@@ -628,6 +646,7 @@ export async function checkInKids(
         },
       });
 
+      kidsFullSheetCache.delete(sheetId);
       const cached = kidsSheetCache.get(sheetId);
       if (cached) {
         const cacheRowIndex = targetRowNumber - 2;
@@ -742,10 +761,20 @@ export async function checkInKids(
  * 讀取兒童名單並找出家長電話欄。
  * 家長姓名/電話若是合併儲存格，只有第一列有值：兩欄都空白時沿用上一列（與 toggle-contact 相同作法）。
  */
-async function readKidsSheet(sheetId: string) {
+const kidsFullSheetCache = new Map<string, { values: any[][]; fetchedAt: number }>();
+
+async function readKidsSheet(sheetId: string, opts: { fresh?: boolean } = {}) {
   const sheets = getGoogleSheetsClient();
-  const response = await sheets.spreadsheets.values.get({ spreadsheetId: sheetId, range: 'A1:U' });
-  const allRows = response.data.values || [];
+  // 查詢同戶資料用 10 秒快取（減少 Google API 讀取次數）；寫入前一律重新讀取
+  const cachedFull = kidsFullSheetCache.get(sheetId);
+  let allRows: any[][];
+  if (!opts.fresh && cachedFull && Date.now() - cachedFull.fetchedAt < KIDS_SHEET_CACHE_TTL_MS) {
+    allRows = cachedFull.values;
+  } else {
+    const response = await sheets.spreadsheets.values.get({ spreadsheetId: sheetId, range: 'A1:U' });
+    allRows = response.data.values || [];
+    kidsFullSheetCache.set(sheetId, { values: allRows, fetchedAt: Date.now() });
+  }
   const headerRow = (allRows[0] || []).map((h) => (h || '').toString());
   const rows = allRows.slice(1);
   const phoneCol =
@@ -779,6 +808,7 @@ export interface KidsFamilyMember {
   已到: string;
   到達時間: string;
   小隊: string;
+  詳細欄位: DetailField[];
 }
 
 export async function findKidsFamily(
@@ -793,6 +823,7 @@ export async function findKidsFamily(
     已到: (row[0] || '').toString(),
     到達時間: (row[1] || '').toString(),
     小隊: detailsOf(row)[0]?.值 || '',
+    詳細欄位: detailsOf(row),
   });
   const idx = rowIndex - 2;
   if (!rows[idx]) return null;
@@ -810,7 +841,7 @@ export async function checkInKidsRows(
   sheetId: string,
   targets: { rowIndex: number; 姓名: string }[]
 ): Promise<{ checkedIn: (Attendee & { rowIndex: number })[]; skipped: { 姓名: string; reason: string }[] }> {
-  const { sheets, rows, detailsOf } = await readKidsSheet(sheetId);
+  const { sheets, rows, detailsOf } = await readKidsSheet(sheetId, { fresh: true });
   const now = taipeiNow();
   const checkedIn: (Attendee & { rowIndex: number })[] = [];
   const skipped: { 姓名: string; reason: string }[] = [];
@@ -842,7 +873,8 @@ export async function checkInKidsRows(
       spreadsheetId: sheetId,
       requestBody: { valueInputOption: 'RAW', data },
     });
-    // 同步搜尋快取，避免 10 秒內查詢仍顯示未報到
+    // 同步快取，避免 10 秒內查詢仍顯示未報到
+    kidsFullSheetCache.delete(sheetId);
     const cached = kidsSheetCache.get(sheetId);
     if (cached) {
       for (const c of checkedIn) {
@@ -1010,4 +1042,10 @@ export async function logManagerAction(params: {
   } catch (error) {
     console.error('Error logging manager action:', error);
   }
+}
+
+/** 兒童名單被其他 API 直接修改後呼叫，清除搜尋與同戶查詢的快取 */
+export function invalidateKidsCache(sheetId: string) {
+  kidsSheetCache.delete(sheetId);
+  kidsFullSheetCache.delete(sheetId);
 }
