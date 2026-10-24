@@ -58,29 +58,38 @@ export default function KidsManagerPage() {
   const [family, setFamily] = useState<FamilyCandidate[] | null>(null);
   const [picked, setPicked] = useState<Set<number>>(new Set());
   const closePopup = useCallback(() => setPopup(null), []);
-  // 上一筆報到紀錄：每次報到覆蓋，只保留最近一筆（存在這台裝置的瀏覽器）
+  // 最近的報到紀錄：最新在前，最多保留 3 筆（存在這台裝置的瀏覽器）
+  const HISTORY_LIMIT = 3;
+  type CheckInRecord = { 時間: string; 操作人員: string; people: CheckInInfo[]; 不會出席?: string[] };
   const lastKey = `easycheck_kids_last_checkin:${eventId}`;
-  const [lastCheckIn, setLastCheckIn] = useState<{ 時間: string; 操作人員: string; people: CheckInInfo[] } | null>(null);
+  const [history, setHistory] = useState<CheckInRecord[]>([]);
   useEffect(() => {
     try {
       const raw = window.localStorage.getItem(lastKey);
-      if (raw) setLastCheckIn(JSON.parse(raw));
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      // 舊版只存一筆物件，轉成陣列
+      setHistory((Array.isArray(parsed) ? parsed : [parsed]).slice(0, HISTORY_LIMIT));
     } catch {
       // 無痕模式等情況讀不到就略過
     }
   }, [lastKey]);
-  const rememberCheckIn = (people: CheckInInfo[]) => {
-    const record = {
+  const rememberCheckIn = (people: CheckInInfo[], absent: string[] = []) => {
+    const record: CheckInRecord = {
       時間: new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false }),
       操作人員: staffName,
       people,
+      ...(absent.length ? { 不會出席: absent } : {}),
     };
-    setLastCheckIn(record);
-    try {
-      window.localStorage.setItem(lastKey, JSON.stringify(record));
-    } catch {
-      // 略過
-    }
+    setHistory((prev) => {
+      const next = [record, ...prev].slice(0, HISTORY_LIMIT);
+      try {
+        window.localStorage.setItem(lastKey, JSON.stringify(next));
+      } catch {
+        // 略過
+      }
+      return next;
+    });
   };
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -272,20 +281,29 @@ export default function KidsManagerPage() {
     if (!family || !selected) return;
     const targets = family.filter((m) => picked.has(m.rowIndex)).map((m) => ({ rowIndex: m.rowIndex, 姓名: m.姓名 }));
     if (targets.length === 0) return;
+    // 同戶未勾選（且尚未報到）的孩子視為缺席，標記為不會出席
+    const absentTargets = family
+      .filter((m) => !picked.has(m.rowIndex) && m.已到 !== 'TRUE')
+      .map((m) => ({ rowIndex: m.rowIndex, 姓名: m.姓名 }));
     setActionLoading(true);
     try {
       const res = await fetch('/api/kids/checkin/batch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sheetId: effectiveSheetId, targets, eventId, operator: staffName }),
+        body: JSON.stringify({ sheetId: effectiveSheetId, targets, absentTargets, eventId, operator: staffName }),
       });
       const data = await res.json();
       const skippedText = (data.skipped || []).map((x: { 姓名: string; reason: string }) => `${x.姓名}：${x.reason}`).join('；');
       setFamily(null);
       if (data.success) {
-        setMessage(`✅ 已由工作人員代為報到 ${data.data.length} 位（兒童）${skippedText ? `；${skippedText}` : ''}`);
+        const absentNames: string[] = (data.markedAbsent || []).map((a: { 姓名: string }) => a.姓名);
+        setMessage(
+          `✅ 已由工作人員代為報到 ${data.data.length} 位（兒童）` +
+            (absentNames.length ? `；標記不會出席：${absentNames.join('、')}` : '') +
+            (skippedText ? `；${skippedText}` : '')
+        );
         setPopup(data.data as CheckInInfo[]);
-        rememberCheckIn(data.data as CheckInInfo[]);
+        rememberCheckIn(data.data as CheckInInfo[], absentNames);
         resetSearch();
       } else {
         setMessage(`❌ 報到失敗：${data.message || '未知錯誤'}`);
@@ -741,32 +759,44 @@ export default function KidsManagerPage() {
                   <p className="text-xs text-slate-700 whitespace-pre-line mt-2">{message}</p>
                 )}
 
-                {lastCheckIn && lastCheckIn.people.length > 0 && (
+                {history.length > 0 && (
                   <div className="mt-2 rounded-md border border-emerald-200 bg-emerald-50 p-3">
-                    <p className="text-xs font-medium text-emerald-800">
-                      上一筆報到（{lastCheckIn.時間}
-                      {lastCheckIn.操作人員 ? `・${lastCheckIn.操作人員}` : ''}
-                      {lastCheckIn.people.length > 1 ? `・${lastCheckIn.people.length} 位` : ''}）
-                    </p>
-                    <ul className="mt-1 space-y-1">
-                      {lastCheckIn.people.map((p) => (
-                        <li key={`${p.序號}-${p.姓名}`}>
-                          <button
-                            type="button"
-                            className="text-sm text-slate-800 hover:underline"
-                            title="點選重新查詢這位兒童"
-                            onClick={() => {
-                              setKeyword(p.序號 || p.姓名);
-                              void searchFor(p.序號 || p.姓名);
-                            }}
-                          >
-                            <span className="font-medium mr-2">{p.序號}</span>
-                            {p.姓名}
-                            {p.詳細欄位?.[0]?.值 && <span className="ml-2 text-xs text-slate-500">{p.詳細欄位[0].值}</span>}
-                          </button>
+                    <p className="text-xs font-medium text-emerald-800">最近報到紀錄（最多 {HISTORY_LIMIT} 筆）</p>
+                    <ol className="mt-1 divide-y divide-emerald-100">
+                      {history.map((record, ri) => (
+                        <li key={ri} className="py-1.5">
+                          <p className="text-xs text-emerald-700">
+                            {record.時間}
+                            {record.操作人員 ? `・${record.操作人員}` : ''}
+                            {record.people.length > 1 ? `・${record.people.length} 位` : ''}
+                          </p>
+                          <ul className="space-y-0.5">
+                            {record.people.map((p) => (
+                              <li key={`${p.序號}-${p.姓名}`}>
+                                <button
+                                  type="button"
+                                  className="text-sm text-slate-800 hover:underline"
+                                  title="點選重新查詢這位兒童"
+                                  onClick={() => {
+                                    setKeyword(p.序號 || p.姓名);
+                                    void searchFor(p.序號 || p.姓名);
+                                  }}
+                                >
+                                  <span className="font-medium mr-2">{p.序號}</span>
+                                  {p.姓名}
+                                  {p.詳細欄位?.[0]?.值 && (
+                                    <span className="ml-2 text-xs text-slate-500">{p.詳細欄位[0].值}</span>
+                                  )}
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                          {record.不會出席 && record.不會出席.length > 0 && (
+                            <p className="text-xs text-amber-700">不會出席：{record.不會出席.join('、')}</p>
+                          )}
                         </li>
                       ))}
-                    </ul>
+                    </ol>
                   </div>
                 )}
               </>
@@ -782,6 +812,7 @@ export default function KidsManagerPage() {
           picked={picked}
           loading={actionLoading}
           hint="以下是同一個家長電話的兄弟姊妹，請勾選今天有來的孩子。"
+          uncheckedNote="未勾選的孩子會標記為「不會出席」"
           onToggle={(rowIndex, checked) => {
             const next = new Set(picked);
             if (checked) next.add(rowIndex);

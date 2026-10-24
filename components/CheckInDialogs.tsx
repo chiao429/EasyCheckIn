@@ -91,6 +91,7 @@ export function FamilyPickDialog({
   onCancel,
   loading,
   hint = '以下是同一個聯絡電話的家人，請勾選今天有來的人。',
+  uncheckedNote,
 }: {
   members: FamilyCandidate[];
   picked: Set<number>;
@@ -99,6 +100,8 @@ export function FamilyPickDialog({
   onCancel: () => void;
   loading: boolean;
   hint?: string;
+  /** 說明未勾選者會怎麼處理，例如標記為不會出席 */
+  uncheckedNote?: string;
 }) {
   return (
     <div
@@ -139,6 +142,14 @@ export function FamilyPickDialog({
             );
           })}
         </ul>
+        {uncheckedNote && (() => {
+          const unchecked = members.filter((m) => m.已到 !== 'TRUE' && !picked.has(m.rowIndex));
+          return unchecked.length > 0 ? (
+            <p className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              {uncheckedNote}：{unchecked.map((m) => m.姓名).join('、')}
+            </p>
+          ) : null;
+        })()}
         <Button className="mt-5 h-12 w-full text-lg" disabled={loading || picked.size === 0} onClick={onConfirm}>
           {loading ? (
             <>

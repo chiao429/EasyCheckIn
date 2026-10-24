@@ -839,8 +839,13 @@ export async function findKidsFamily(
 
 export async function checkInKidsRows(
   sheetId: string,
-  targets: { rowIndex: number; 姓名: string }[]
-): Promise<{ checkedIn: (Attendee & { rowIndex: number })[]; skipped: { 姓名: string; reason: string }[] }> {
+  targets: { rowIndex: number; 姓名: string }[],
+  absentTargets: { rowIndex: number; 姓名: string }[] = []
+): Promise<{
+  checkedIn: (Attendee & { rowIndex: number })[];
+  markedAbsent: { rowIndex: number; 序號: string; 姓名: string }[];
+  skipped: { 姓名: string; reason: string }[];
+}> {
   const { sheets, rows, detailsOf } = await readKidsSheet(sheetId, { fresh: true });
   const now = taipeiNow();
   const checkedIn: (Attendee & { rowIndex: number })[] = [];
@@ -868,6 +873,19 @@ export async function checkInKidsRows(
     });
   }
 
+  // 同戶未勾選者：標記為不會出席（與 mark-cancelled 相同：A=CANCELLED、B 清空）；已報到者不動
+  const markedAbsent: { rowIndex: number; 序號: string; 姓名: string }[] = [];
+  for (const t of absentTargets) {
+    const row = rows[t.rowIndex - 2];
+    if (!row || (row[5] || '').toString() !== t.姓名) {
+      skipped.push({ 姓名: t.姓名, reason: '資料已變動，未標記不會出席' });
+      continue;
+    }
+    if (row[0] === 'TRUE' || row[0] === 'CANCELLED') continue;
+    data.push({ range: `A${t.rowIndex}:B${t.rowIndex}`, values: [['CANCELLED', '']] });
+    markedAbsent.push({ rowIndex: t.rowIndex, 序號: (row[4] || '').toString(), 姓名: t.姓名 });
+  }
+
   if (data.length > 0) {
     await sheets.spreadsheets.values.batchUpdate({
       spreadsheetId: sheetId,
@@ -884,9 +902,16 @@ export async function checkInKidsRows(
           cacheRow[1] = now;
         }
       }
+      for (const a of markedAbsent) {
+        const cacheRow = cached.dataRows[a.rowIndex - 2];
+        if (cacheRow) {
+          cacheRow[0] = 'CANCELLED';
+          cacheRow[1] = '';
+        }
+      }
     }
   }
-  return { checkedIn, skipped };
+  return { checkedIn, markedAbsent, skipped };
 }
 
 // 紀錄管理員相關操作（例如代為簽到、取消簽到、標記不會來）
