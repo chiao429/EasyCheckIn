@@ -21,6 +21,9 @@ interface Attendee {
   詳細欄位?: DetailField[];
 }
 
+const LIST_MODES = ['all', 'checked', 'cancelled', 'unchecked', 'contacted', 'toContact'] as const;
+type ListMode = (typeof LIST_MODES)[number];
+
 export default function KidsDashboardPage() {
   const params = useParams();
   const eventId = params.eventId as string;
@@ -31,9 +34,8 @@ export default function KidsDashboardPage() {
   const [loading, setLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [listMode, setListMode] = useState<'all' | 'checked' | 'cancelled' | 'unchecked'>(
-    'checked'
-  );
+  // contacted / toContact：聯繫狀態卡點選後，只列未報到中的已聯繫 / 待聯繫
+  const [listMode, setListMode] = useState<ListMode>('checked');
   const [showDetails, setShowDetails] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -86,18 +88,8 @@ export default function KidsDashboardPage() {
     if (typeof window === 'undefined') return;
     try {
       const listKey = `kids_dashboard_list_mode_${eventId}`;
-      const storedMode = window.localStorage.getItem(listKey) as
-        | 'all'
-        | 'checked'
-        | 'cancelled'
-        | 'unchecked'
-        | null;
-      if (
-        storedMode === 'all' ||
-        storedMode === 'checked' ||
-        storedMode === 'cancelled' ||
-        storedMode === 'unchecked'
-      ) {
+      const storedMode = window.localStorage.getItem(listKey) as ListMode | null;
+      if (storedMode && (LIST_MODES as readonly string[]).includes(storedMode)) {
         setListMode(storedMode);
       }
 
@@ -221,6 +213,8 @@ export default function KidsDashboardPage() {
   const checkedList = attendeesBySquad.filter((a) => a.已到 === 'TRUE');
   const cancelledList = attendeesBySquad.filter((a) => a.已到 === 'CANCELLED');
   const uncheckedList = attendeesBySquad.filter((a) => a.已到 !== 'TRUE' && a.已到 !== 'CANCELLED');
+  const contactedList = uncheckedList.filter((a) => a.需要聯繫 === 'TRUE');
+  const toContactList = uncheckedList.filter((a) => a.需要聯繫 !== 'TRUE');
 
   const getDetailList = () => {
     switch (listMode) {
@@ -230,6 +224,10 @@ export default function KidsDashboardPage() {
         return checkedList;
       case 'cancelled':
         return cancelledList;
+      case 'contacted':
+        return contactedList;
+      case 'toContact':
+        return toContactList;
       case 'unchecked':
       default:
         return uncheckedList;
@@ -256,9 +254,7 @@ export default function KidsDashboardPage() {
   const startIndex = (safePage - 1) * effectivePageSize;
   const pagedList = detailList.slice(startIndex, startIndex + effectivePageSize);
 
-  const handleChangeListMode = (
-    mode: 'all' | 'checked' | 'cancelled' | 'unchecked'
-  ) => {
+  const handleChangeListMode = (mode: ListMode) => {
     setListMode(mode);
     setCurrentPage(1);
   };
@@ -446,14 +442,28 @@ export default function KidsDashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="flex flex-col gap-1 text-sm">
-                <div className="flex items-baseline justify-between">
-                  <span className="text-slate-300">已聯繫</span>
-                  <span className="text-lg font-semibold text-emerald-300">{contacted}</span>
-                </div>
-                <div className="flex items-baseline justify-between">
-                  <span className="text-slate-300">待聯繫</span>
-                  <span className="text-lg font-semibold text-amber-300">{uncontacted}</span>
-                </div>
+                {(
+                  [
+                    { mode: 'contacted', label: '已聯繫', value: contacted, color: 'text-emerald-300', ring: 'ring-emerald-400' },
+                    { mode: 'toContact', label: '待聯繫', value: uncontacted, color: 'text-amber-300', ring: 'ring-amber-400' },
+                  ] as const
+                ).map((item) => (
+                  <button
+                    key={item.mode}
+                    type="button"
+                    title={`在下方列出${item.label}的兒童`}
+                    onClick={() => {
+                      // 名單區塊關閉時一併打開
+                      if (!showDetails) setShowDetails(true);
+                      handleChangeListMode(item.mode);
+                    }}
+                    className={`flex items-baseline justify-between rounded-md px-2 py-1 -mx-2 text-left transition cursor-pointer hover:bg-slate-800
+                      ${showDetails && listMode === item.mode ? `bg-slate-800 ring-2 ${item.ring}` : ''}`}
+                  >
+                    <span className="text-slate-300">{item.label}</span>
+                    <span className={`text-lg font-semibold ${item.color}`}>{item.value}</span>
+                  </button>
+                ))}
               </div>
             </CardContent>
           </Card>
@@ -464,7 +474,9 @@ export default function KidsDashboardPage() {
             className={`cursor-default transition-shadow hover:shadow-md bg-slate-900/80 border border-slate-700
               ${listMode === 'checked' && 'border-emerald-700 bg-emerald-950/60'}
               ${listMode === 'unchecked' && 'border-red-700 bg-red-950/60'}
-              ${listMode === 'cancelled' && 'border-amber-700 bg-amber-950/60'}`}
+              ${listMode === 'cancelled' && 'border-amber-700 bg-amber-950/60'}
+              ${listMode === 'contacted' && 'border-emerald-700 bg-slate-900/80'}
+              ${listMode === 'toContact' && 'border-amber-600 bg-slate-900/80'}`}
           >
             <CardHeader>
               <CardTitle
@@ -472,12 +484,16 @@ export default function KidsDashboardPage() {
                   ${listMode === 'all' && 'text-slate-100'}
                   ${listMode === 'checked' && 'text-emerald-200'}
                   ${listMode === 'unchecked' && 'text-red-200'}
-                  ${listMode === 'cancelled' && 'text-amber-200'}`}
+                  ${listMode === 'cancelled' && 'text-amber-200'}
+                  ${listMode === 'contacted' && 'text-emerald-200'}
+                  ${listMode === 'toContact' && 'text-amber-200'}`}
               >
                 {listMode === 'all' && '全部兒童名單'}
                 {listMode === 'checked' && '已報到兒童名單'}
                 {listMode === 'unchecked' && '尚未報到兒童名單'}
                 {listMode === 'cancelled' && '不會出席兒童名單'}
+                {listMode === 'contacted' && '已聯繫（尚未報到）兒童名單'}
+                {listMode === 'toContact' && '待聯繫（尚未報到）兒童名單'}
               </CardTitle>
               <div className="mt-2 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                 {listMode === 'unchecked' && (
@@ -527,12 +543,16 @@ export default function KidsDashboardPage() {
                     ${listMode === 'all' && 'text-slate-100'}
                     ${listMode === 'checked' && 'text-emerald-300'}
                     ${listMode === 'unchecked' && 'text-red-300'}
-                    ${listMode === 'cancelled' && 'text-amber-300'}`}
+                    ${listMode === 'cancelled' && 'text-amber-300'}
+                    ${listMode === 'contacted' && 'text-emerald-300'}
+                    ${listMode === 'toContact' && 'text-amber-300'}`}
                 >
                   {listMode === 'all' && '顯示所有兒童名單（包含已報到、未報到與不會出席）'}
                   {listMode === 'checked' && '顯示目前已報到的兒童'}
                   {listMode === 'unchecked' && '顯示目前尚未報到的兒童'}
                   {listMode === 'cancelled' && '顯示已標記不會出席的兒童'}
+                  {listMode === 'contacted' && '顯示尚未報到、已經聯繫過的兒童'}
+                  {listMode === 'toContact' && '顯示尚未報到、還沒聯繫的兒童'}
                 </p>
               </div>
             </CardHeader>
@@ -581,7 +601,7 @@ export default function KidsDashboardPage() {
                               {listMode === 'checked' && (
                                 <span className="text-[11px] text-emerald-300">已報到</span>
                               )}
-                              {listMode === 'unchecked' && (
+                              {(listMode === 'unchecked' || listMode === 'contacted' || listMode === 'toContact') && (
                                 <span className="text-[11px] text-slate-400">未報到</span>
                               )}
                               {listMode === 'cancelled' && (
