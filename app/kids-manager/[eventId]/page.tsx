@@ -12,7 +12,7 @@ import {
   type CheckInInfo,
   type FamilyCandidate,
 } from '@/components/CheckInDialogs';
-import { Search, UserCheck, UserX, Ban, MapPin, Eraser } from 'lucide-react';
+import { Search, UserCheck, UserX, Ban, MapPin, Eraser, Keyboard, Delete } from 'lucide-react';
 
 interface KidsDetailField {
   標題: string;
@@ -92,6 +92,26 @@ export default function KidsManagerPage() {
     });
   };
   const searchInputRef = useRef<HTMLInputElement>(null);
+  // 數字鍵盤（快速輸入序號），展開狀態記在這台裝置
+  const KEYPAD_KEY = 'easycheck_kids_manager_keypad';
+  const [showKeypad, setShowKeypad] = useState(false);
+  useEffect(() => {
+    try {
+      setShowKeypad(window.localStorage.getItem(KEYPAD_KEY) === '1');
+    } catch {
+      // 略過
+    }
+  }, []);
+  const toggleKeypad = () => {
+    setShowKeypad((v) => {
+      try {
+        window.localStorage.setItem(KEYPAD_KEY, v ? '0' : '1');
+      } catch {
+        // 略過
+      }
+      return !v;
+    });
+  };
 
   const [squadSchedule, setSquadSchedule] = useState<SquadScheduleMap | null>(null);
   const [squadLookupLoading, setSquadLookupLoading] = useState(false);
@@ -544,7 +564,53 @@ export default function KidsManagerPage() {
             {staffName.trim() && (
               <>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">搜尋序號或兒童姓名</label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium">搜尋序號或兒童姓名</label>
+                    <Button type="button" variant="outline" size="sm" onClick={toggleKeypad} aria-expanded={showKeypad}>
+                      <Keyboard className="w-4 h-4 mr-1" />
+                      {showKeypad ? '收起數字鍵盤' : '數字鍵盤'}
+                    </Button>
+                  </div>
+                  {showKeypad && (
+                    <div className="grid grid-cols-3 gap-2 max-w-xs mx-auto" aria-label="數字鍵盤">
+                      {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((d) => (
+                        <Button
+                          key={d}
+                          type="button"
+                          variant="outline"
+                          className="h-14 text-2xl font-semibold"
+                          onClick={() => setKeyword((k) => k + d)}
+                        >
+                          {d}
+                        </Button>
+                      ))}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-14"
+                        aria-label="刪除一個字"
+                        onClick={() => setKeyword((k) => k.slice(0, -1))}
+                      >
+                        <Delete className="w-6 h-6" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-14 text-2xl font-semibold"
+                        onClick={() => setKeyword((k) => k + '0')}
+                      >
+                        0
+                      </Button>
+                      <Button
+                        type="button"
+                        className="h-14 text-lg font-semibold"
+                        disabled={loading || !keyword.trim()}
+                        onClick={handleSearch}
+                      >
+                        確認
+                      </Button>
+                    </div>
+                  )}
                   <div className="flex gap-2">
                     <Input
                       ref={searchInputRef}
