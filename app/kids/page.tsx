@@ -27,6 +27,7 @@ export default function KidsHomePage() {
   const [checkinUrl, setCheckinUrl] = useState('');
   const [adminUrl, setAdminUrl] = useState('');
   const [managerUrl, setManagerUrl] = useState('');
+  const [squadUrl, setSquadUrl] = useState('');
   const [dashboardUrl, setDashboardUrl] = useState('');
   const [selectedEvent, setSelectedEvent] = useState<EventConfig | null>(null);
   const [copyMessage, setCopyMessage] = useState('');
@@ -74,6 +75,7 @@ export default function KidsHomePage() {
       `${baseUrl}/kids-admin/${event.eventId}?sheet=${encodeURIComponent(event.sheetId)}`
     );
     setManagerUrl(managerPageUrl);
+    setSquadUrl(`${baseUrl}/kids-squad/${event.eventId}?sheet=${encodeURIComponent(event.sheetId)}`);
     setDashboardUrl(
       `${baseUrl}/kids-dashboard/${event.eventId}?sheet=${encodeURIComponent(event.sheetId)}`
     );
@@ -285,6 +287,33 @@ export default function KidsHomePage() {
                         </a>
                         <p className="text-[11px] text-emerald-700 mt-1">
                           簡化介面，專注於快速搜尋和代為報到
+                        </p>
+                      </div>
+
+                      <div className="p-3 bg-sky-50 rounded-lg border border-sky-200">
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="text-xs font-medium text-sky-900">小隊長頁（kids-squad，需小隊長密碼）</p>
+                          {squadUrl && (
+                            <button
+                              type="button"
+                              onClick={() => handleCopy(squadUrl)}
+                              className="inline-flex items-center text-[11px] text-sky-700 hover:text-sky-900"
+                            >
+                              <Copy className="w-3 h-3 mr-1" /> 複製
+                            </button>
+                          )}
+                        </div>
+                        <a
+                          href={squadUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-sky-700 hover:underline flex items-center break-all"
+                        >
+                          {squadUrl}
+                          <ExternalLink className="w-3 h-3 ml-1 shrink-0" />
+                        </a>
+                        <p className="text-[11px] text-sky-700 mt-1">
+                          小隊長只看自己小隊：出席狀況、目前位置、報到與聯繫（密碼在活動設定表「資訊」B2）
                         </p>
                       </div>
 

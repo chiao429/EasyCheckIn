@@ -1156,3 +1156,87 @@ export async function getKidsSchedule(sheetId: string): Promise<Record<string, S
   kidsScheduleCache.set(sheetId, { data, fetchedAt: Date.now() });
   return data;
 }
+
+// ───────── 兒童版：小隊長頁（/kids-squad） ─────────
+
+const squadPasswordCache: { value: string | null; fetchedAt: number } = { value: null, fetchedAt: 0 };
+
+/** 小隊長密碼：活動設定試算表 資訊!B2（後台密碼在 A2）；60 秒快取 */
+export async function getSquadPassword(): Promise<string | null> {
+  if (Date.now() - squadPasswordCache.fetchedAt < 60_000) return squadPasswordCache.value;
+  const configSheetId = process.env.GOOGLE_EVENT_CONFIG_SHEET_ID;
+  if (!configSheetId) return null;
+  const response = await getGoogleSheetsClient().spreadsheets.values.get({
+    spreadsheetId: configSheetId,
+    range: '資訊!B2:B2',
+  });
+  const value = (response.data.values?.[0]?.[0] ?? '').toString().trim() || null;
+  squadPasswordCache.value = value;
+  squadPasswordCache.fetchedAt = Date.now();
+  return value;
+}
+
+export interface SquadKid {
+  rowIndex: number;
+  序號: string;
+  姓名: string;
+  性別: string;
+  年級: string;
+  已到: string;
+  到達時間: string;
+  已聯繫: boolean;
+  家長: string;
+  電話: string;
+  備註: string;
+  詳細欄位: DetailField[];
+}
+
+/**
+ * 依「所屬小隊」分組的名單（使用 10 秒快取的完整名單）。
+ * 家長姓名/電話若為合併儲存格，沿用上一列。
+ */
+export async function getKidsBySquad(sheetId: string): Promise<{ squadTitle: string; bySquad: Map<string, SquadKid[]> }> {
+  const { headerRow, rows, phones, detailsOf } = await readKidsSheet(sheetId);
+  const find = (pred: (h: string) => boolean) => headerRow.findIndex(pred);
+  let squadCol = find((h) => h.trim() === '所屬小隊');
+  if (squadCol === -1) squadCol = find((h) => h.includes('小隊') && !h.includes('手足'));
+  if (squadCol === -1) squadCol = 3;
+  const col = (name: string) => find((h) => h.trim() === name);
+  const genderCol = col('性別');
+  const gradeCol = col('年級');
+  const noteCol = col('備註');
+  const parentCol = find((h) => h.includes('家長') && !h.includes('電話'));
+
+  const bySquad = new Map<string, SquadKid[]>();
+  let lastParent = '';
+  rows.forEach((row, i) => {
+    const name = (row[5] || '').toString().trim();
+    const serial = (row[4] || '').toString().trim();
+    if (!name && !serial) {
+      lastParent = '';
+      return;
+    }
+    const parentRaw = parentCol === -1 ? '' : (row[parentCol] || '').toString().trim();
+    const parent = parentRaw || lastParent;
+    lastParent = parent;
+    const squad = (row[squadCol] || '').toString().trim().toUpperCase();
+    if (!squad) return;
+    const digits = phones[i] || '';
+    const kid: SquadKid = {
+      rowIndex: i + 2,
+      序號: serial,
+      姓名: name,
+      性別: genderCol === -1 ? '' : (row[genderCol] || '').toString(),
+      年級: gradeCol === -1 ? '' : (row[gradeCol] || '').toString(),
+      已到: (row[0] || '').toString(),
+      到達時間: (row[1] || '').toString(),
+      已聯繫: (row[20] || '').toString() === 'TRUE',
+      家長: parent,
+      電話: digits.length === 9 && digits.startsWith('9') ? `0${digits}` : digits,
+      備註: noteCol === -1 ? '' : (row[noteCol] || '').toString(),
+      詳細欄位: detailsOf(row),
+    };
+    bySquad.set(squad, [...(bySquad.get(squad) ?? []), kid]);
+  });
+  return { squadTitle: headerRow[squadCol] || '所屬小隊', bySquad };
+}
