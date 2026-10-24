@@ -514,38 +514,38 @@ export default function KidsManagerPage() {
     if (!attendee) return null;
     if (attendee.已到 === 'TRUE') {
       return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+        <span className="inline-flex shrink-0 items-center whitespace-nowrap px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
           <UserCheck className="w-3 h-3 mr-1" /> 已報到
         </span>
       );
     }
     if (attendee.已到 === 'CANCELLED') {
       return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+        <span className="inline-flex shrink-0 items-center whitespace-nowrap px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
           <Ban className="w-3 h-3 mr-1" /> 不會出席
         </span>
       );
     }
     return (
-      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800">
+      <span className="inline-flex shrink-0 items-center whitespace-nowrap px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800">
         <UserX className="w-3 h-3 mr-1" /> 未報到
       </span>
     );
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 md:p-8 flex flex-col">
-      <div className="max-w-2xl mx-auto space-y-6 flex-1">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-3 sm:p-4 md:p-8 flex flex-col">
+      <div className="w-full max-w-2xl mx-auto space-y-6 flex-1 min-w-0">
         <Card className="shadow-md">
-          <CardHeader>
-            <CardTitle className="text-2xl">兒童 Manager（現場工作人員工具）</CardTitle>
+          <CardHeader className="px-4 sm:px-6">
+            <CardTitle className="text-xl sm:text-2xl">兒童 Manager（現場工作人員工具）</CardTitle>
             <CardDescription>
               給現場工作人員使用的兒童報到介面，用來協助快速查詢與報到。
               <br />
               <span className="text-amber-600 font-medium">第一次查詢會比較久，請稍等。</span>
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 px-4 sm:px-6">
             <div className="space-y-2">
               <label className="text-sm font-medium">工作人員名稱</label>
               <Input
@@ -564,15 +564,15 @@ export default function KidsManagerPage() {
             {staffName.trim() && (
               <>
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2">
                     <label className="text-sm font-medium">搜尋序號或兒童姓名</label>
                     <Button type="button" variant="outline" size="sm" onClick={toggleKeypad} aria-expanded={showKeypad}>
                       <Keyboard className="w-4 h-4 mr-1" />
-                      {showKeypad ? '收起數字鍵盤' : '數字鍵盤'}
+                      {showKeypad ? '收起鍵盤' : '數字鍵盤'}
                     </Button>
                   </div>
                   {showKeypad && (
-                    <div className="grid grid-cols-3 gap-2 max-w-xs mx-auto" aria-label="數字鍵盤">
+                    <div className="grid grid-cols-3 gap-2 w-full max-w-xs mx-auto" aria-label="數字鍵盤">
                       {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((d) => (
                         <Button
                           key={d}
@@ -611,7 +611,7 @@ export default function KidsManagerPage() {
                       </Button>
                     </div>
                   )}
-                  <div className="flex gap-2">
+                  <div className="flex flex-col gap-2 sm:flex-row">
                     <Input
                       ref={searchInputRef}
                       placeholder="請輸入報名序號或姓名"
@@ -619,6 +619,7 @@ export default function KidsManagerPage() {
                       onChange={(e) => setKeyword(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                     />
+                    <div className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0">
                     <Button onClick={handleSearch} disabled={loading}>
                       <Search className="w-4 h-4 mr-1" />
                       {loading ? '搜尋中...' : '搜尋'}
@@ -634,6 +635,7 @@ export default function KidsManagerPage() {
                       <Eraser className="w-4 h-4 mr-1" />
                       清空
                     </Button>
+                    </div>
                   </div>
                   <div className="text-xs text-slate-600 space-y-0.5 pl-1">
                     <p>• 序號請輸入完整序號</p>
@@ -642,8 +644,8 @@ export default function KidsManagerPage() {
                 </div>
 
                 {staffName.trim() && selected && (
-                  <div className="mt-4 p-4 rounded-md border bg-white space-y-3">
-                    <div className="flex items-center justify-between">
+                  <div className="mt-4 p-3 sm:p-4 rounded-md border bg-white space-y-3">
+                    <div className="flex items-start justify-between gap-2">
                       <div>
                         <p className="text-sm font-medium">
                           序號：{selected.序號}｜兒童姓名：{selected.姓名}
@@ -656,7 +658,7 @@ export default function KidsManagerPage() {
                       {getStatusLabel(selected)}
                     </div>
 
-                    <div className="flex flex-wrap gap-2 pt-2 border-t mt-2">
+                    <div className="grid grid-cols-2 gap-2 pt-2 border-t mt-2 sm:flex sm:flex-wrap">
                       {selected.已到 !== 'TRUE' && selected.已到 !== 'CANCELLED' && (
                         <Button
                           variant="default"
@@ -737,12 +739,12 @@ export default function KidsManagerPage() {
                         {squadLookupResult && (
                           <div className="border rounded-md bg-white">
                             <div className="overflow-x-auto">
-                              <table className="min-w-[520px] w-full text-xs">
+                              <table className="w-full text-xs">
                                 <thead className="bg-slate-50 text-slate-600">
                                   <tr className="text-left">
-                                    <th className="px-3 py-2 font-medium w-[92px]">區域</th>
-                                    <th className="px-3 py-2 font-medium w-[110px]">時間</th>
-                                    <th className="px-3 py-2 font-medium">地點</th>
+                                    <th className="px-2 sm:px-3 py-2 font-medium whitespace-nowrap">區域</th>
+                                    <th className="px-2 sm:px-3 py-2 font-medium whitespace-nowrap">時間</th>
+                                    <th className="px-2 sm:px-3 py-2 font-medium">地點</th>
                                   </tr>
                                 </thead>
                                 <tbody className="divide-y">
@@ -753,13 +755,13 @@ export default function KidsManagerPage() {
                                         key={`${item.time}-${idx}`}
                                         className={isNow ? 'bg-red-50 text-red-700' : 'text-slate-800'}
                                       >
-                                        <td className="px-3 py-2 align-top whitespace-nowrap">
+                                        <td className="px-2 sm:px-3 py-2 align-top whitespace-nowrap">
                                           {item.area || '-'}
                                         </td>
-                                        <td className={`px-3 py-2 align-top whitespace-nowrap ${isNow ? 'font-semibold' : ''}`}>
+                                        <td className={`px-2 sm:px-3 py-2 align-top whitespace-nowrap ${isNow ? 'font-semibold' : ''}`}>
                                           {item.time}
                                         </td>
-                                        <td className={`px-3 py-2 align-top ${isNow ? 'font-semibold' : 'text-slate-700'}`}>
+                                        <td className={`px-2 sm:px-3 py-2 align-top ${isNow ? 'font-semibold' : 'text-slate-700'}`}>
                                           <span className="break-words">{item.place}</span>
                                         </td>
                                       </tr>
