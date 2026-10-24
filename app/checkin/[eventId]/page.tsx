@@ -1,20 +1,18 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { SiteFooter } from '@/components/SiteFooter';
+import {
+  CheckInResultDialog,
+  FamilyPickDialog,
+  type CheckInInfo as CheckInData,
+  type FamilyCandidate as FamilyMember,
+} from '@/components/CheckInDialogs';
 import { CheckCircle2, XCircle, Loader2, UserCheck } from 'lucide-react';
-
-interface CheckInData {
-  序號: string;
-  姓名: string;
-  到達時間: string;
-  已到?: string;
-  詳細欄位?: { 標題: string; 值: string }[];
-}
 
 export default function CheckInPage() {
   const params = useParams();
@@ -29,27 +27,46 @@ export default function CheckInPage() {
     message: string;
     data?: any;
   } | null>(null);
-  // 報到成功後彈出的報名資訊視窗
-  const [popup, setPopup] = useState<CheckInData | null>(null);
+  // 報到成功後彈出的報名資訊視窗（可能是一家人多位）
+  const [popup, setPopup] = useState<CheckInData[] | null>(null);
+  // 同一聯絡電話的家人，勾選後一起報到
+  const [family, setFamily] = useState<FamilyMember[] | null>(null);
+  const [picked, setPicked] = useState<Set<number>>(new Set());
   const inputRef = useRef<HTMLInputElement>(null);
+  const sheetId = sheetFromQuery || process.env.GOOGLE_SHEET_ID || eventId;
 
-  const closePopup = () => {
+  const focusInput = () => setTimeout(() => inputRef.current?.focus(), 0);
+  const closePopup = useCallback(() => {
     setPopup(null);
-    setTimeout(() => inputRef.current?.focus(), 0);
+    focusInput();
+  }, []);
+  const closeFamily = () => {
+    setFamily(null);
+    focusInput();
   };
 
-  useEffect(() => {
-    if (!popup) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' || e.key === 'Enter') closePopup();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [popup]);
+  const post = async (url: string, body: unknown) => {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    return response.json();
+  };
+
+  // 單人報到（沒有家人時，維持原本流程）
+  const checkInSingle = async (name: string) => {
+    const data = await post('/api/checkin', { identifier: name, sheetId });
+    setResult(data);
+    if (data.success) {
+      setIdentifier('');
+      if (data.data) setPopup([data.data as CheckInData]);
+    }
+  };
 
   const handleCheckIn = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!identifier.trim()) {
       setResult({
         success: false,
@@ -62,29 +79,47 @@ export default function CheckInPage() {
     setResult(null);
 
     try {
-      const response = await fetch('/api/checkin', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          identifier: identifier.trim(),
-          sheetId: sheetFromQuery || process.env.GOOGLE_SHEET_ID || eventId,
-        }),
-      });
-
-      const data = await response.json();
-      setResult(data);
-      
-      if (data.success) {
-        setIdentifier('');
-        if (data.data) setPopup(data.data as CheckInData);
+      const lookup = await post('/api/checkin/family', { identifier: identifier.trim(), sheetId });
+      if (!lookup.success) {
+        setResult(lookup);
+        return;
       }
+      const { main, others } = lookup.data as { main: FamilyMember; others: FamilyMember[] };
+      if (others.length === 0) {
+        await checkInSingle(identifier.trim());
+        return;
+      }
+      const list = [main, ...others];
+      setFamily(list);
+      setPicked(new Set(list.filter((m) => m.已到 !== 'TRUE').map((m) => m.rowIndex)));
     } catch (error) {
       setResult({
         success: false,
         message: '網路錯誤，請檢查連線後再試',
       });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFamilyCheckIn = async () => {
+    if (!family) return;
+    const targets = family.filter((m) => picked.has(m.rowIndex)).map((m) => ({ rowIndex: m.rowIndex, 姓名: m.姓名 }));
+    if (targets.length === 0) return;
+    setLoading(true);
+    try {
+      const data = await post('/api/checkin/batch', { sheetId, targets });
+      const skippedText = (data.skipped || []).map((x: { 姓名: string; reason: string }) => `${x.姓名}：${x.reason}`).join('；');
+      setResult({ success: data.success, message: skippedText ? `${data.message}（${skippedText}）` : data.message });
+      setFamily(null);
+      if (data.success) {
+        setIdentifier('');
+        setPopup(data.data as CheckInData[]);
+      } else {
+        focusInput();
+      }
+    } catch (error) {
+      setResult({ success: false, message: '網路錯誤，請檢查連線後再試' });
     } finally {
       setLoading(false);
     }
@@ -155,7 +190,7 @@ export default function CheckInPage() {
                 >
                   {result.message}
                 </p>
-                {result.success && result.data && (
+                {result.success && result.data && !Array.isArray(result.data) && (
                   <div className="mt-2 text-sm text-green-800 space-y-1">
                     <p>序號：{result.data.序號}</p>
                     <p>姓名：{result.data.姓名}</p>
@@ -176,51 +211,23 @@ export default function CheckInPage() {
       </Card>
       <SiteFooter />
 
-      {popup && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          onClick={closePopup}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="checkin-popup-title"
-        >
-          <div
-            className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex flex-col items-center text-center">
-              <CheckCircle2 className="h-14 w-14 text-green-600" />
-              <p id="checkin-popup-title" className="mt-2 text-lg font-semibold text-green-700">
-                簽到成功
-              </p>
-              <p className="mt-1 text-3xl font-bold text-gray-900">{popup.姓名}</p>
-            </div>
-
-            <dl className="mt-5 space-y-2 rounded-lg bg-gray-50 p-4 text-sm">
-              <div className="flex justify-between gap-4">
-                <dt className="text-gray-500">序號</dt>
-                <dd className="font-medium text-gray-900">{popup.序號 || '—'}</dd>
-              </div>
-              <div className="flex justify-between gap-4">
-                <dt className="text-gray-500">報到時間</dt>
-                <dd className="font-medium text-gray-900">{popup.到達時間}</dd>
-              </div>
-              {popup.詳細欄位
-                ?.filter((f) => f.值.trim() !== '')
-                .map((f) => (
-                  <div key={f.標題} className="flex justify-between gap-4">
-                    <dt className="shrink-0 text-gray-500">{f.標題}</dt>
-                    <dd className="text-right font-medium text-gray-900">{f.值}</dd>
-                  </div>
-                ))}
-            </dl>
-
-            <Button className="mt-5 h-12 w-full text-lg" onClick={closePopup} autoFocus>
-              確定
-            </Button>
-          </div>
-        </div>
+      {family && (
+        <FamilyPickDialog
+          members={family}
+          picked={picked}
+          loading={loading}
+          onToggle={(rowIndex, checked) => {
+            const next = new Set(picked);
+            if (checked) next.add(rowIndex);
+            else next.delete(rowIndex);
+            setPicked(next);
+          }}
+          onConfirm={handleFamilyCheckIn}
+          onCancel={closeFamily}
+        />
       )}
+
+      {popup && <CheckInResultDialog people={popup} onClose={closePopup} />}
     </div>
   );
 }

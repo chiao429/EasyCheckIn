@@ -1,11 +1,17 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { SiteFooter } from '@/components/SiteFooter';
+import {
+  CheckInResultDialog,
+  FamilyPickDialog,
+  type CheckInInfo,
+  type FamilyCandidate,
+} from '@/components/CheckInDialogs';
 import { Search, UserCheck, UserX, Ban, MapPin } from 'lucide-react';
 
 interface KidsDetailField {
@@ -46,6 +52,12 @@ export default function KidsManagerPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [showDetails, setShowDetails] = useState(false);
+
+  // 報到成功的報名資訊視窗、同一家庭一起報到
+  const [popup, setPopup] = useState<CheckInInfo[] | null>(null);
+  const [family, setFamily] = useState<FamilyCandidate[] | null>(null);
+  const [picked, setPicked] = useState<Set<number>>(new Set());
+  const closePopup = useCallback(() => setPopup(null), []);
 
   const [squadSchedule, setSquadSchedule] = useState<SquadScheduleMap | null>(null);
   const [squadLookupLoading, setSquadLookupLoading] = useState(false);
@@ -150,7 +162,70 @@ export default function KidsManagerPage() {
     return nowMin >= startMin && nowMin <= endMin;
   };
 
+  // 代為報到：先查同一家長電話的兄弟姊妹，有的話讓工作人員勾選一起報到
   const handleManagerCheckIn = async () => {
+    if (!selected || !effectiveSheetId) return;
+    if (typeof selected.rowIndex === 'number') {
+      setActionLoading(true);
+      setMessage(null);
+      try {
+        const res = await fetch('/api/kids/family', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sheetId: effectiveSheetId, rowIndex: selected.rowIndex }),
+        });
+        const data = await res.json();
+        if (data.success && data.data.others.length > 0) {
+          const list: FamilyCandidate[] = [data.data.main, ...data.data.others].map(
+            (m: { rowIndex: number; 序號: string; 姓名: string; 已到: string; 到達時間: string; 小隊: string }) => ({
+              ...m,
+              備註: m.小隊 ? `小隊 ${m.小隊}` : undefined,
+            })
+          );
+          setFamily(list);
+          setPicked(new Set(list.filter((m) => m.已到 !== 'TRUE').map((m) => m.rowIndex)));
+          setActionLoading(false);
+          return;
+        }
+      } catch (error) {
+        // 查不到家人時直接走單人報到
+        console.error('Kids family lookup error:', error);
+      }
+      setActionLoading(false);
+    }
+    await checkInSelectedOnly();
+  };
+
+  const handleFamilyCheckIn = async () => {
+    if (!family || !selected) return;
+    const targets = family.filter((m) => picked.has(m.rowIndex)).map((m) => ({ rowIndex: m.rowIndex, 姓名: m.姓名 }));
+    if (targets.length === 0) return;
+    setActionLoading(true);
+    try {
+      const res = await fetch('/api/kids/checkin/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sheetId: effectiveSheetId, targets, eventId, operator: staffName }),
+      });
+      const data = await res.json();
+      const skippedText = (data.skipped || []).map((x: { 姓名: string; reason: string }) => `${x.姓名}：${x.reason}`).join('；');
+      setFamily(null);
+      if (data.success) {
+        setMessage(`✅ 已由工作人員代為報到 ${data.data.length} 位（兒童）${skippedText ? `；${skippedText}` : ''}`);
+        setPopup(data.data as CheckInInfo[]);
+        await refreshSelected(selected.序號 || selected.姓名);
+      } else {
+        setMessage(`❌ 報到失敗：${data.message || '未知錯誤'}`);
+      }
+    } catch (error) {
+      console.error('Kids family check-in error:', error);
+      setMessage('❌ 代為報到時發生錯誤');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const checkInSelectedOnly = async () => {
     if (!selected || !effectiveSheetId) return;
     setActionLoading(true);
     setMessage(null);
@@ -173,6 +248,14 @@ export default function KidsManagerPage() {
       const data = await response.json();
       if (data.success) {
         setMessage('✅ 已由工作人員代為報到（兒童）');
+        setPopup([
+          {
+            序號: selected.序號,
+            姓名: selected.姓名,
+            到達時間: data.data?.到達時間 || '',
+            詳細欄位: selected.詳細欄位,
+          },
+        ]);
         await refreshSelected(selected.序號 || selected.姓名);
       } else {
         setMessage(`❌ 報到失敗：${data.message || '未知錯誤'}`);
@@ -574,6 +657,25 @@ export default function KidsManagerPage() {
         </Card>
       </div>
       <SiteFooter />
+
+      {family && (
+        <FamilyPickDialog
+          members={family}
+          picked={picked}
+          loading={actionLoading}
+          hint="以下是同一個家長電話的兄弟姊妹，請勾選今天有來的孩子。"
+          onToggle={(rowIndex, checked) => {
+            const next = new Set(picked);
+            if (checked) next.add(rowIndex);
+            else next.delete(rowIndex);
+            setPicked(next);
+          }}
+          onConfirm={handleFamilyCheckIn}
+          onCancel={() => setFamily(null)}
+        />
+      )}
+
+      {popup && <CheckInResultDialog people={popup} onClose={closePopup} />}
     </div>
   );
 }
