@@ -4,6 +4,7 @@ import { CraftNav } from '@/components/CraftNav';
 import Link from 'next/link';
 import { eventTypes } from '@/lib/event-types';
 import { FormEvent, useEffect, useRef, useState } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 
 type Config = { configId: string; year: string; name: string; configSheetId: string; folderUrl: string; status: string; acceptsCheckins: boolean; createdAt: string; validatedAt: string; publishedBindings: string };
 
@@ -21,6 +22,7 @@ export default function YearsPage() {
   const [authenticated, setAuthenticated] = useState(false);
   const [sessionChecked, setSessionChecked] = useState(false);
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [configs, setConfigs] = useState<Config[]>([]);
   const [activeConfigId, setActiveConfigId] = useState('');
   const [driveConnected, setDriveConnected] = useState(false);
@@ -117,7 +119,7 @@ export default function YearsPage() {
     <CraftNav working={authenticated} />
     <div className="craft-content">
     <header className="mb-8"><h1 className="mt-2 text-3xl font-bold">年度設定</h1><p className="mt-2 text-slate-600">登記活動設定表，驗證後切換首頁使用的年度。</p></header>
-    {!sessionChecked ? <p role="status" className="rounded-xl border bg-white p-6 text-slate-600">正在確認年度管理登入狀態…</p> : !authenticated ? <form onSubmit={login} className="max-w-md rounded-xl border bg-white p-6 shadow-sm"><label className="block text-sm font-medium">年度管理密碼<input autoComplete="current-password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} className="mt-2 w-full rounded-md border px-3 py-2" required /></label><button disabled={busy} className="mt-4 rounded-md bg-blue-700 px-4 py-2 font-semibold text-white disabled:opacity-50">登入</button></form> : <>
+    {!sessionChecked ? <p role="status" className="rounded-xl border bg-white p-6 text-slate-600">正在確認年度管理登入狀態…</p> : !authenticated ? <form onSubmit={login} className="max-w-md rounded-xl border bg-white p-6 shadow-sm"><label className="block text-sm font-medium">年度管理密碼<span className="relative mt-2 block"><input autoComplete="current-password" type={showPassword ? 'text' : 'password'} value={password} onChange={(event) => setPassword(event.target.value)} className="w-full rounded-md border px-3 py-2 pr-11" required /><button type="button" aria-label={showPassword ? '隱藏密碼' : '顯示密碼'} aria-pressed={showPassword} onClick={() => setShowPassword((shown) => !shown)} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-2 text-slate-500 hover:text-slate-900">{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></span></label><button disabled={busy} className="mt-4 rounded-md bg-blue-700 px-4 py-2 font-semibold text-white disabled:opacity-50">登入</button></form> : <>
       <section className="mb-8 rounded-xl border bg-white p-6 shadow-sm"><h2 className="text-xl font-semibold">新增年度</h2><p className="mt-1 text-sm text-slate-600">系統會在年度資料夾新增活動設定表，並建立同工及兒童活動欄位。</p><div className="mt-4 flex flex-wrap items-center gap-3"><span className={`text-sm ${driveConnected ? 'text-emerald-700' : 'text-amber-700'}`}>Google Drive：{driveConnected ? '已連結' : '尚未連結'}</span>{!driveConnected && <a href="/api/admin/years/oauth" className="rounded-md border px-3 py-2 text-sm font-medium">連結 Google 帳號</a>}</div><form onSubmit={(event) => { event.preventDefault(); void submit('create', { year, name, folderUrl }); }} className="mt-4 grid gap-4 md:grid-cols-2">
         <label className="text-sm">年度<input value={year} onChange={(e) => setYear(e.target.value)} className="mt-1 w-full rounded-md border px-3 py-2" required /></label><label className="text-sm">顯示名稱<input value={name} onChange={(e) => setName(e.target.value)} className="mt-1 w-full rounded-md border px-3 py-2" required /></label>
         <label className="text-sm md:col-span-2">年度 Drive 資料夾連結<input value={folderUrl} onChange={(e) => setFolderUrl(e.target.value)} className="mt-1 w-full rounded-md border px-3 py-2" required /></label>
