@@ -27,6 +27,11 @@ export async function POST(request: NextRequest) {
     response.cookies.set(YEAR_ADMIN_COOKIE, makeYearAdminToken(), { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/', maxAge: 8 * 60 * 60 });
     return response;
   }
+  if (body.action === 'logout') {
+    const response = NextResponse.json({ success: true });
+    response.cookies.set(YEAR_ADMIN_COOKIE, '', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/', maxAge: 0 });
+    return response;
+  }
   if (!(await hasYearAdminSession())) return NextResponse.json({ success: false }, { status: 401 });
   if (!registryConfigured()) return NextResponse.json({ success: false, message: '尚未設定年度資料來源' }, { status: 503 });
 
