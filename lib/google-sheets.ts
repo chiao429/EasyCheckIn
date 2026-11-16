@@ -10,7 +10,7 @@ export function extractSheetIdFromUrl(urlOrId: string): string {
 }
 
 // Google Sheets API 客戶端
-export function getGoogleSheetsClient() {
+function getGoogleAuth(scope: string) {
   const clientEmail =
     process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || process.env.GOOGLE_CLIENT_EMAIL;
   const privateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n');
@@ -21,15 +21,26 @@ export function getGoogleSheetsClient() {
     );
   }
 
-  const auth = new google.auth.GoogleAuth({
+  return new google.auth.GoogleAuth({
     credentials: {
       client_email: clientEmail,
       private_key: privateKey,
     },
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+    scopes: [scope],
   });
 
-  return google.sheets({ version: 'v4', auth });
+}
+
+export function getGoogleSheetsClient() {
+  return google.sheets({ version: 'v4', auth: getGoogleAuth('https://www.googleapis.com/auth/spreadsheets') });
+}
+
+export function getGoogleDriveMetadataClient() {
+  return google.drive({ version: 'v3', auth: getGoogleAuth('https://www.googleapis.com/auth/drive.metadata.readonly') });
+}
+
+export function getGoogleDriveClient() {
+  return google.drive({ version: 'v3', auth: getGoogleAuth('https://www.googleapis.com/auth/drive') });
 }
 
 // 資料型別定義
@@ -49,8 +60,7 @@ export interface DetailField {
 }
 
 // 從活動設定試算表讀取後台密碼（資訊!A2）
-export async function getAdminPasswordFromConfigSheet(): Promise<string | null> {
-  const configSheetId = process.env.GOOGLE_EVENT_CONFIG_SHEET_ID;
+export async function getAdminPasswordFromConfigSheet(configSheetId = process.env.GOOGLE_EVENT_CONFIG_SHEET_ID): Promise<string | null> {
   if (!configSheetId) {
     console.error('GOOGLE_EVENT_CONFIG_SHEET_ID is not set');
     return null;
@@ -86,7 +96,7 @@ export async function getAllAttendees(sheetId: string): Promise<Attendee[]> {
     // 讀取標題列和資料列
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: sheetId,
-      range: 'A1:I', // 從第一列開始讀取（包含標題），包含 I 欄聯絡組
+      range: 'A1:Z', // 從第一列開始讀取，支援活動自訂欄位
     });
 
     const rows = response.data.values || [];
@@ -111,10 +121,10 @@ export async function getAllAttendees(sheetId: string): Promise<Attendee[]> {
     
     return dataRows.map((row) => {
       // E~I 欄位 (索引 4~8)
-      const extraHeaders = headerRow.slice(4, 9);
-      const extraValues = row.slice(4, 9).map((v) => (v ?? '').toString());
+      const extraHeaders = headerRow.slice(4);
+      const extraValues = row.slice(4).map((v) => (v ?? '').toString());
       const 詳細欄位: DetailField[] = extraHeaders.map((h, idx) => ({
-        標題: (h || '').toString(),
+        標題: (h || '').toString().trim(),
         值: extraValues[idx] || '',
       }));
 
@@ -378,10 +388,10 @@ export async function searchAttendee(
 ): Promise<AttendeeWithDetails[]> {
   const sheets = getGoogleSheetsClient();
 
-  // 一次讀取 A1:H，第一列為標題列，其餘為資料列
+  // 一次讀取 A1:Z，第一列為標題列，其餘為資料列
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: sheetId,
-    range: 'A1:H',
+    range: 'A1:Z',
   });
 
   const rows = response.data.values || [];
@@ -397,9 +407,9 @@ export async function searchAttendee(
     const 到達時間 = (row[2] || '').toString();
     const 已到 = (row[3] || '').toString() || 'FALSE';
 
-    // E~H 欄位 (索引 4~7)
-    const extraHeaders = headerRow.slice(4, 8);
-    const extraValues = row.slice(4, 8).map((v) => (v ?? '').toString());
+    // E 欄以後的詳細欄位
+    const extraHeaders = headerRow.slice(4);
+    const extraValues = row.slice(4).map((v) => (v ?? '').toString());
     const 詳細欄位: DetailField[] = extraHeaders.map((h, idx) => ({
       標題: (h || '').toString(),
       值: extraValues[idx] || '',
@@ -437,10 +447,10 @@ export async function getAllKidsAttendees(sheetId: string): Promise<Attendee[]> 
   const sheets = getGoogleSheetsClient();
 
   try {
-    // 讀取標題列和資料列，包含到 U 欄
+    // 讀取標題列和資料列，包含自訂欄位
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: sheetId,
-      range: 'A1:U', // 從第一列開始讀取（包含標題），到 U 欄
+      range: 'A1:Z',
     });
 
     const rows = response.data.values || [];
@@ -455,13 +465,11 @@ export async function getAllKidsAttendees(sheetId: string): Promise<Attendee[]> 
         const 姓名 = (row[5] || '').toString(); // F 欄
         const 需要聯繫 = (row[20] || '').toString(); // U 欄 (索引 20)
 
-        // D~T 欄位 (索引 3~19) 作為詳細欄位
-        const extraHeaders = headerRow.slice(3, 20);
-        const extraValues = row.slice(3, 20).map((v) => (v ?? '').toString());
-        const 詳細欄位: DetailField[] = extraHeaders.map((h, idx) => ({
-          標題: (h || '').toString(),
-          值: extraValues[idx] || '',
-        }));
+        const 詳細欄位: DetailField[] = headerRow.flatMap((h, idx) =>
+          idx >= 2 && ![4, 5, 20].includes(idx) && String(h || '').trim()
+            ? [{ 標題: String(h).trim(), 值: String(row[idx] ?? '') }]
+            : [],
+        );
 
         return {
           序號,
@@ -918,6 +926,7 @@ export async function checkInKidsRows(
 // 以 eventId 為主鍵從活動設定表中找到對應列，依據該列 E 欄的 log sheet 連結寫入紀錄
 export async function logManagerAction(params: {
   eventId: string;
+  logSheetId?: string | null;
   action:
     | 'manager_checkin'
     | 'manager_checkin_failed'
@@ -930,6 +939,7 @@ export async function logManagerAction(params: {
     | 'toggle_contact'
     | 'toggle_contact_failed'
     | 'admin_login'
+    | 'import_attendees'
     | 'system_error'
     | 'system_warning';
   identifier: string;
@@ -941,42 +951,16 @@ export async function logManagerAction(params: {
   const { eventId, action, identifier, attendeeName, result, message, operator } = params;
 
   const configSheetId = process.env.GOOGLE_EVENT_CONFIG_SHEET_ID;
-  if (!configSheetId) {
-    console.error('GOOGLE_EVENT_CONFIG_SHEET_ID is not set, skip manager log');
-    return;
-  }
+  let logSheetId = params.logSheetId;
+  if (logSheetId === null || (logSheetId === undefined && (process.env.GOOGLE_YEAR_ROOT_FOLDER_ID || process.env.GOOGLE_YEAR_REGISTRY_SHEET_ID || !configSheetId))) return;
 
   const sheets = getGoogleSheetsClient();
 
   try {
-    // 讀取活動設定表，假設結構：
-    // A: 活動名稱
-    // B: 活動試算表連結
-    // C: eventId
-    // D: 備註
-    // E: 操作紀錄連結（log Sheet 連結）
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: configSheetId,
-      range: 'A2:E',
-    });
-
-    const rows = response.data.values || [];
-
-    let logSheetId: string | null = null;
-
-    for (const row of rows) {
-      const rowEventId = (row[2] || '').toString();
-      if (!rowEventId) continue;
-
-      if (rowEventId === eventId) {
-        const logSheetLink = row[4] || '';
-        if (!logSheetLink) {
-          console.warn('No log sheet link configured for eventId:', eventId);
-          return;
-        }
-        logSheetId = extractSheetIdFromUrl(logSheetLink);
-        break;
-      }
+    if (logSheetId === undefined && configSheetId) {
+      const response = await sheets.spreadsheets.values.get({ spreadsheetId: configSheetId, range: 'A2:E' });
+      const row = response.data.values?.find((item) => String(item[2] || '') === eventId);
+      logSheetId = extractSheetIdFromUrl(row?.[4] || '');
     }
 
     if (!logSheetId) {
@@ -1021,6 +1005,8 @@ export async function logManagerAction(params: {
           return '標記晚到-失敗';
         case 'admin_login':
           return '後台登入-成功';
+        case 'import_attendees':
+          return '匯入名單';
         case 'system_error':
           return '系統錯誤';
         case 'system_warning':

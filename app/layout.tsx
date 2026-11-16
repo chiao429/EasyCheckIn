@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { RouteTransition } from "@/components/RouteTransition";
 
 export const metadata: Metadata = {
   title: "EasyCheck - 活動點名系統",
@@ -17,7 +18,7 @@ export default function RootLayout({
   return (
     <html lang="zh-TW">
       <body className="antialiased">
-        {children}
+        <RouteTransition>{children}</RouteTransition>
       </body>
     </html>
   );

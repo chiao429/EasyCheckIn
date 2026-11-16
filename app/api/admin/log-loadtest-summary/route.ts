@@ -1,17 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logManagerAction } from '@/lib/google-sheets';
+import { registryConfigured, resolveYearEvent } from '@/lib/year-registry';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const {
-      eventId,
+      eventId, configId, sheetId,
       type,
       success,
       failed,
       limited,
     }: {
       eventId?: string;
+      configId?: string;
+      sheetId?: string;
       type?: 'loadtest' | 'random_write';
       success?: number;
       failed?: number;
@@ -33,7 +36,11 @@ export async function POST(request: NextRequest) {
     const identifier = type === 'random_write' ? 'admin-random-write' : 'admin-loadtest';
     const message = `壓力測試 summary (${identifier}): total=${total}, success=${s}, failed=${f}, limited=${l}`;
 
+    const annual = registryConfigured();
+    const match = annual && (configId || sheetId) ? await resolveYearEvent(eventId, configId, sheetId) : null;
+    if (annual && !match) return NextResponse.json({ success: false, message: '找不到對應活動' }, { status: 404 });
     await logManagerAction({
+      logSheetId: annual ? match?.event.logSheetId || null : undefined,
       eventId,
       action: 'system_warning',
       identifier,

@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getKidsBySquad, getKidsSchedule } from '@/lib/google-sheets';
+import { resolveRequestedSheet } from '@/lib/year-registry';
 
 export const dynamic = 'force-dynamic';
 
 // 小隊長頁：只回傳指定小隊的名單與時間表
 export async function GET(request: NextRequest) {
   try {
-    const sheetId = request.nextUrl.searchParams.get('sheetId');
+    const params = request.nextUrl.searchParams;
+    const sheetId = await resolveRequestedSheet(params.get('eventId'), params.get('sheetId'), params.get('configId'));
     const squad = (request.nextUrl.searchParams.get('squad') || '').trim().toUpperCase();
     if (!sheetId) {
       return NextResponse.json({ success: false, message: '缺少 sheetId 參數' }, { status: 400 });

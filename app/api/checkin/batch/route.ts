@@ -1,13 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { checkInRows } from '@/lib/google-sheets';
+import { resolveRequestedActivity } from '@/lib/year-registry';
 
 // 自助報到：同一家人一次報到（最多 10 人）
 export async function POST(request: NextRequest) {
   try {
-    const { sheetId, targets } = (await request.json()) as {
+    const body = (await request.json()) as {
       sheetId?: string;
       targets?: { rowIndex: number; 姓名: string }[];
+      eventId?: string;
+      configId?: string;
     };
+    const { targets, eventId, configId } = body;
+    const { checkinClosed, sheetId } = await resolveRequestedActivity(eventId || null, body.sheetId || null, configId, true);
+    if (checkinClosed) return NextResponse.json({ success: false, message: '此活動目前未開放報到' }, { status: 409 });
     if (!sheetId || !Array.isArray(targets) || targets.length === 0) {
       return NextResponse.json({ success: false, message: '請至少選擇一位' }, { status: 400 });
     }

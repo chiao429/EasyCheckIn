@@ -1,0 +1,14 @@
+services:
+  easycheck:
+    image: ${IMAGE:-ghcr.io/your-org/easycheck:latest}
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    ports:
+      - "${PORT:-3000}:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:3000/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s

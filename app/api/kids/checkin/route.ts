@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { checkInKids, logManagerAction } from '@/lib/google-sheets';
+import { resolveRequestedActivity } from '@/lib/year-registry';
 
 let currentWindowStart = Date.now();
 let requestCountInWindow = 0;
@@ -37,14 +38,17 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { identifier, sheetId, eventId, operator, attendeeName, rowIndex } = body as {
+    const { identifier, sheetId: requestedSheetId, eventId, operator, attendeeName, rowIndex, configId } = body as {
       identifier?: string;
       sheetId?: string;
       eventId?: string;
       operator?: string;
       attendeeName?: string;
       rowIndex?: number;
+      configId?: string;
     };
+    const { checkinClosed, sheetId, logSheetId } = await resolveRequestedActivity(eventId || null, requestedSheetId || null, configId, true);
+    if (checkinClosed) return NextResponse.json({ success: false, message: '此活動目前未開放報到' }, { status: 409 });
 
     if (!identifier || !sheetId) {
       return NextResponse.json(
@@ -58,6 +62,7 @@ export async function POST(request: NextRequest) {
     if (eventId) {
       try {
         await logManagerAction({
+          logSheetId,
           eventId,
           action: result.success ? 'manager_checkin' : 'manager_checkin_failed',
           identifier,

@@ -21,6 +21,7 @@ export default function KidsCheckPage() {
   const params = useParams();
   const eventId = params.eventId as string;
   const searchParams = useSearchParams();
+  const configId = searchParams.get('configId') || undefined;
   const router = useRouter();
   const sheetFromQuery = searchParams.get('sheet');
 
@@ -52,7 +53,7 @@ export default function KidsCheckPage() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`/api/admin/event-sheets?eventId=${encodeURIComponent(eventId)}`);
+        const res = await fetch(`/api/admin/event-sheets?eventId=${encodeURIComponent(eventId)}&sheetId=${encodeURIComponent(sheetFromQuery || '')}${configId ? '&configId=' + encodeURIComponent(configId) : ''}`);
         const data = await res.json();
         if (data.success && data.data) {
           setActivitySheetUrl(data.data.activitySheetUrl || data.data.activitySheetLink || null);
@@ -113,7 +114,7 @@ export default function KidsCheckPage() {
       const response = await fetch(
         `/api/kids/attendees?sheetId=${encodeURIComponent(
           effectiveSheetId
-        )}&filter=${filter}&eventId=${encodeURIComponent(eventId)}`
+        )}&filter=${filter}&eventId=${encodeURIComponent(eventId)}${configId ? '&configId=' + encodeURIComponent(configId) : ''}`
       );
       const data = await response.json();
 
@@ -136,7 +137,7 @@ export default function KidsCheckPage() {
       const response = await fetch(
         `/api/kids/search?sheetId=${encodeURIComponent(
           effectiveSheetId
-        )}&query=${encodeURIComponent(searchQuery)}&eventId=${encodeURIComponent(eventId)}`
+        )}&query=${encodeURIComponent(searchQuery)}&eventId=${encodeURIComponent(eventId)}${configId ? '&configId=' + encodeURIComponent(configId) : ''}`
       );
       const data = await response.json();
 
@@ -184,6 +185,7 @@ export default function KidsCheckPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          configId,
           sheetId: effectiveSheetId,
           identifier,
           eventId,
@@ -214,6 +216,7 @@ export default function KidsCheckPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          configId,
           sheetId: effectiveSheetId,
           identifier,
           eventId,
@@ -306,6 +309,7 @@ export default function KidsCheckPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          configId,
           sheetId: effectiveSheetId,
           identifier,
           eventId,
@@ -362,7 +366,7 @@ export default function KidsCheckPage() {
   }, [activeTab]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 md:p-8 flex flex-col">
+    <div className="min-h-screen craft-field p-4 md:p-8 flex flex-col">
       <div className="max-w-7xl mx-auto space-y-6 flex-1">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>

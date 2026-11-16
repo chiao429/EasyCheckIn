@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getKidsSchedule } from '@/lib/google-sheets';
+import { resolveRequestedSheet } from '@/lib/year-registry';
 
 export const dynamic = 'force-dynamic';
 
 // 兒童版小隊時間表：優先讀活動試算表的「小隊時間表」分頁，沒有分頁時回傳 source=file
 export async function GET(request: NextRequest) {
-  const sheetId = request.nextUrl.searchParams.get('sheetId');
+  const params = request.nextUrl.searchParams;
+  const sheetId = await resolveRequestedSheet(params.get('eventId'), params.get('sheetId'), params.get('configId'));
   if (!sheetId) {
     return NextResponse.json({ success: false, message: '缺少 sheetId 參數' }, { status: 400 });
   }

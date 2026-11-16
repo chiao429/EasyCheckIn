@@ -25,6 +25,7 @@ export default function DashboardPage() {
   const params = useParams();
   const eventId = params.eventId as string;
   const searchParams = useSearchParams();
+  const configId = searchParams.get('configId') || undefined;
   const sheetFromQuery = searchParams.get('sheet');
 
   const [attendees, setAttendees] = useState<Attendee[]>([]);
@@ -66,7 +67,7 @@ export default function DashboardPage() {
 
     try {
       const response = await fetch(
-        `/api/attendees?sheetId=${encodeURIComponent(effectiveSheetId)}&filter=all`
+        `/api/attendees?sheetId=${encodeURIComponent(effectiveSheetId)}&filter=all&eventId=${encodeURIComponent(eventId)}${configId ? '&configId=' + encodeURIComponent(configId) : ''}`
       );
       const data = await response.json();
 
@@ -351,6 +352,7 @@ export default function DashboardPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          configId,
           sheetId: effectiveSheetId,
           identifier,
           eventId,
@@ -404,12 +406,12 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 p-4 md:p-8 flex flex-col">
+    <div className="min-h-screen craft-field dashboard-dark p-4 md:p-8 flex flex-col">
       <div className="max-w-6xl mx-auto space-y-6 flex-1">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-100">出席狀況儀表板</h1>
-            <p className="text-sm text-slate-300 mt-1">即時出席概況畫面</p>
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-stone-950">出席狀況儀表板</h1>
+            <p className="text-sm text-stone-700 mt-1">即時出席概況畫面</p>
           </div>
           <div className="flex flex-col items-end gap-2">
             <div className="flex items-center gap-2">
@@ -418,7 +420,7 @@ export default function DashboardPage() {
                 size="sm"
                 onClick={fetchData}
                 disabled={loading}
-                className="border-slate-600 text-slate-200 bg-slate-800 hover:bg-slate-700"
+                className="border-stone-300 text-stone-800 bg-stone-50 hover:bg-stone-100"
               >
                 <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
                 重新整理
@@ -427,21 +429,21 @@ export default function DashboardPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => setShowDetails((prev) => !prev)}
-                className={`border-slate-600 text-xs font-medium rounded-full px-3 py-1.5 transition-all
+                className={`border-stone-300 text-xs font-medium rounded-full px-3 py-1.5 transition-all
                   ${showDetails
                     ? 'bg-emerald-500 text-slate-900 hover:bg-emerald-400 shadow-md'
-                    : 'bg-slate-800 text-slate-200 hover:bg-slate-700'}`}
+                    : 'bg-stone-50 text-stone-800 hover:bg-stone-100'}`}
               >
                 <span className="mr-2">名單區塊</span>
                 <span
                   className={`inline-flex items-center w-10 h-5 rounded-full px-0.5 text-[10px] font-semibold transition-all
-                    ${showDetails ? 'bg-emerald-900 text-emerald-300 justify-end' : 'bg-slate-500 text-slate-100 justify-start'}`}
+                    ${showDetails ? 'bg-emerald-100 text-emerald-900 justify-end' : 'bg-stone-200 text-stone-950 justify-start'}`}
                 >
                   <span className="w-4 h-4 rounded-full bg-white shadow" />
                 </span>
               </Button>
             </div>
-            <p className="text-[11px] text-slate-400">
+            <p className="text-[11px] text-stone-600">
               最後更新時間：{lastUpdated || '尚未載入'}
             </p>
           </div>
@@ -456,7 +458,7 @@ export default function DashboardPage() {
         {/* KPI Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card
-            className={`bg-slate-700 border-slate-600 transition-all cursor-pointer hover:shadow-md ${
+            className={`bg-stone-100 border-stone-300 transition-all cursor-pointer hover:shadow-md ${
               showDetails && listMode === 'all'
                 ? 'ring-4 ring-slate-200 ring-offset-2 ring-offset-slate-900 shadow-xl scale-[1.05] -translate-y-1'
                 : 'shadow-sm'
@@ -468,16 +470,16 @@ export default function DashboardPage() {
           >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <div className="flex flex-col gap-1">
-                <div className="text-xs text-slate-400">總人數：{total}</div>
+                <div className="text-xs text-stone-600">總人數：{total}</div>
                 <CardTitle className="text-base md:text-lg font-medium text-white">應出席人數</CardTitle>
               </div>
-              <Users className="h-4 w-4 text-slate-300" />
+              <Users className="h-4 w-4 text-stone-700" />
             </CardHeader>
             <CardContent>
-              <div className="text-5xl md:text-6xl font-extrabold text-slate-100 text-right leading-tight">
+              <div className="text-5xl md:text-6xl font-extrabold text-stone-950 text-right leading-tight">
                 {effectiveTotalForRate}
               </div>
-              <p className="text-xs text-slate-300 mt-1">應出席的人數（不含不會來）</p>
+              <p className="text-xs text-stone-700 mt-1">應出席的人數（不含不會來）</p>
             </CardContent>
           </Card>
 
@@ -556,7 +558,7 @@ export default function DashboardPage() {
         {/* 名單區塊：依上方 panel 切換顯示 */}
         {showDetails && (
           <Card
-            className={`cursor-default transition-shadow hover:shadow-md bg-slate-900/80 border border-slate-700
+            className={`cursor-default transition-shadow hover:shadow-md bg-white/80 border border-stone-200
               ${listMode === 'checked' && 'border-emerald-700 bg-emerald-950/60'}
               ${listMode === 'unchecked' && 'border-red-700 bg-red-950/60'}
               ${listMode === 'cancelled' && 'border-amber-700 bg-amber-950/60'}`}
@@ -564,7 +566,7 @@ export default function DashboardPage() {
             <CardHeader>
               <CardTitle
                 className={`text-base md:text-lg font-semibold 
-                  ${listMode === 'all' && 'text-slate-100'}
+                  ${listMode === 'all' && 'text-stone-950'}
                   ${listMode === 'checked' && 'text-emerald-200'}
                   ${listMode === 'unchecked' && 'text-red-200'}
                   ${listMode === 'cancelled' && 'text-amber-200'}`}
@@ -584,7 +586,7 @@ export default function DashboardPage() {
                       setCurrentPage(1);
                     }}
                     placeholder="輸入姓名關鍵字進行搜尋"
-                    className="flex-1 md:w-72 rounded-md border border-slate-600 bg-slate-900 px-3 py-1.5 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                    className="flex-1 md:w-72 rounded-md border border-stone-300 bg-white px-3 py-1.5 text-sm text-stone-950 placeholder:text-stone-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                   />
                   <button
                     type="button"
@@ -596,15 +598,15 @@ export default function DashboardPage() {
                     disabled={searchQuery.trim().length === 0 && selectedGroup === 'all'}
                     className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-colors whitespace-nowrap
                       ${searchQuery.trim().length === 0 && selectedGroup === 'all'
-                        ? 'border-slate-700 text-slate-500 bg-slate-800 cursor-not-allowed'
-                        : 'border-slate-500 text-slate-100 bg-slate-800 hover:bg-slate-700'}`}
+                        ? 'border-stone-200 text-stone-600 bg-stone-50 cursor-not-allowed'
+                        : 'border-stone-400 text-stone-950 bg-stone-50 hover:bg-stone-100'}`}
                   >
                     清除篩選
                   </button>
                 </div>
 
                 {listMode === 'unchecked' && (
-                  <label className="inline-flex items-center gap-2 text-xs text-slate-200">
+                  <label className="inline-flex items-center gap-2 text-xs text-stone-800">
                     <input
                       type="checkbox"
                       checked={hideLateInUnchecked}
@@ -612,7 +614,7 @@ export default function DashboardPage() {
                         setHideLateInUnchecked(e.target.checked);
                         setCurrentPage(1);
                       }}
-                      className="w-3 h-3 text-emerald-500 bg-slate-900 border-slate-600 focus:ring-emerald-500 focus:ring-2"
+                      className="w-3 h-3 text-emerald-500 bg-white border-stone-300 focus:ring-emerald-500 focus:ring-2"
                     />
                     不顯示晚到
                   </label>
@@ -620,7 +622,7 @@ export default function DashboardPage() {
                 
                 {/* 聯絡組別 Radio Buttons */}
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs text-slate-400 mr-1">聯絡組別：</span>
+                  <span className="text-xs text-stone-600 mr-1">聯絡組別：</span>
                   <label className="inline-flex items-center cursor-pointer">
                     <input
                       type="radio"
@@ -631,9 +633,9 @@ export default function DashboardPage() {
                         setSelectedGroup(e.target.value);
                         setCurrentPage(1);
                       }}
-                      className="w-3 h-3 text-emerald-500 bg-slate-900 border-slate-600 focus:ring-emerald-500 focus:ring-2"
+                      className="w-3 h-3 text-emerald-500 bg-white border-stone-300 focus:ring-emerald-500 focus:ring-2"
                     />
-                    <span className="ml-1.5 text-xs text-slate-200">全部</span>
+                    <span className="ml-1.5 text-xs text-stone-800">全部</span>
                   </label>
                   {availableGroups.map((group) => (
                     <label key={group} className="inline-flex items-center cursor-pointer">
@@ -646,15 +648,15 @@ export default function DashboardPage() {
                           setSelectedGroup(e.target.value);
                           setCurrentPage(1);
                         }}
-                        className="w-3 h-3 text-emerald-500 bg-slate-900 border-slate-600 focus:ring-emerald-500 focus:ring-2"
+                        className="w-3 h-3 text-emerald-500 bg-white border-stone-300 focus:ring-emerald-500 focus:ring-2"
                       />
-                      <span className="ml-1.5 text-xs text-slate-200">{group}</span>
+                      <span className="ml-1.5 text-xs text-stone-800">{group}</span>
                     </label>
                   ))}
                 </div>
               <p
                 className={`text-xs 
-                  ${listMode === 'all' && 'text-slate-100'}
+                  ${listMode === 'all' && 'text-stone-950'}
                   ${listMode === 'checked' && 'text-emerald-300'}
                   ${listMode === 'unchecked' && 'text-red-300'}
                   ${listMode === 'cancelled' && 'text-amber-300'}`}
@@ -668,7 +670,7 @@ export default function DashboardPage() {
             </CardHeader>
           <CardContent>
             {detailList.length === 0 ? (
-              <p className="text-sm text-slate-400 text-center py-4">
+              <p className="text-sm text-stone-600 text-center py-4">
                 目前尚無符合條件的紀錄
               </p>
             ) : (
@@ -681,18 +683,18 @@ export default function DashboardPage() {
                     return (
                       <div
                         key={`${itemKey}-${idx}`}
-                        className="bg-slate-800 rounded-md border border-slate-700 overflow-hidden"
+                        className="bg-stone-50 rounded-md border border-stone-200 overflow-hidden"
                       >
                         <div
-                          className="flex items-center justify-between py-2 px-3 text-sm cursor-pointer hover:bg-slate-750 transition-colors"
+                          className="flex items-center justify-between py-2 px-3 text-sm cursor-pointer hover:bg-stone-100 transition-colors"
                           onClick={() => setExpandedItem(isExpanded ? null : itemKey)}
                         >
                           <div>
-                            <p className="font-medium text-slate-100">
-                              <span className="mr-2 text-slate-400">{a.序號}</span>
+                            <p className="font-medium text-stone-950">
+                              <span className="mr-2 text-stone-600">{a.序號}</span>
                               {a.姓名}
                             </p>
-                            <p className="text-[11px] text-slate-400 mt-0.5">
+                            <p className="text-[11px] text-stone-600 mt-0.5">
                               {a.到達時間 || '-'}
                             </p>
                           </div>
@@ -705,7 +707,7 @@ export default function DashboardPage() {
                                 {a.已到 === '晚到' ? (
                                   <span className="text-sky-300">晚到</span>
                                 ) : (
-                                  <span className="text-slate-400">未簽到</span>
+                                  <span className="text-stone-600">未簽到</span>
                                 )}
                               </span>
                             )}
@@ -724,7 +726,7 @@ export default function DashboardPage() {
                                   <span className="text-amber-300">不會出席</span>
                                 )}
                                 {a.已到 !== 'TRUE' && a.已到 !== 'CANCELLED' && a.已到 !== '晚到' && (
-                                  <span className="text-slate-300">未簽到</span>
+                                  <span className="text-stone-700">未簽到</span>
                                 )}
                               </span>
                             )}
@@ -733,7 +735,7 @@ export default function DashboardPage() {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className={`h-6 px-2 text-[10px] border-slate-500 text-slate-200 bg-slate-800/70 hover:bg-slate-700/80 transition-all disabled:opacity-60 disabled:cursor-not-allowed ${
+                                className={`h-6 px-2 text-[10px] border-stone-400 text-stone-800 bg-stone-50/70 hover:bg-stone-100/80 transition-all disabled:opacity-60 disabled:cursor-not-allowed ${
                                   rowActionLoading?.startsWith((a.序號 || a.姓名) + '-late-')
                                     ? 'opacity-60 animate-pulse'
                                     : ''
@@ -748,7 +750,7 @@ export default function DashboardPage() {
                               </Button>
                             )}
 
-                            <span className="text-slate-400 text-xs">
+                            <span className="text-stone-600 text-xs">
                               {isExpanded ? '▲' : '▼'}
                             </span>
                           </div>
@@ -756,7 +758,7 @@ export default function DashboardPage() {
                         
                         {/* 展開的詳細資料 */}
                         {isExpanded && a.詳細欄位 && a.詳細欄位.length > 0 && (
-                          <div className="px-3 py-2 border-t border-slate-700 bg-slate-850">
+                          <div className="px-3 py-2 border-t border-stone-200 bg-white">
                             <div className="space-y-1 text-xs">
                               {a.詳細欄位.map((field, fieldIdx) => {
                                 const hasValue = field.值 && field.值.trim().length > 0;
@@ -765,10 +767,10 @@ export default function DashboardPage() {
 
                                 return (
                                   <div key={fieldIdx} className="flex justify-between gap-2">
-                                    <span className="text-slate-400">
+                                    <span className="text-stone-600">
                                       {field.標題 || `欄位 ${fieldIdx + 1}`}：
                                     </span>
-                                    <span className="text-slate-200 break-all">
+                                    <span className="text-stone-800 break-all">
                                       {field.值 || '-'}
                                     </span>
                                   </div>
@@ -781,7 +783,7 @@ export default function DashboardPage() {
                     );
                   })}
                 </div>
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-3 text-[11px] text-slate-300">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-3 text-[11px] text-stone-700">
                   <div className="flex items-center gap-2">
                     <select
                       value={pageSize}
@@ -789,7 +791,7 @@ export default function DashboardPage() {
                         setPageSize(Number(e.target.value));
                         setCurrentPage(1);
                       }}
-                      className="rounded border border-slate-600 bg-slate-900 px-2 py-0.5 text-[11px] text-slate-200 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      className="rounded border border-stone-300 bg-white px-2 py-0.5 text-[11px] text-stone-800 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                     >
                       <option value={5}>5</option>
                       <option value={10}>10</option>
@@ -805,7 +807,7 @@ export default function DashboardPage() {
                       size="sm"
                       disabled={safePage <= 1}
                       onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                      className="h-6 px-2 border-slate-600 text-slate-200 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                      className="h-6 px-2 border-stone-300 text-stone-800 bg-white hover:bg-stone-50 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       上一頁
                     </Button>
@@ -823,7 +825,7 @@ export default function DashboardPage() {
                               ${
                                 page === safePage
                                   ? 'border-emerald-400 bg-emerald-500/20 text-emerald-200'
-                                  : 'border-slate-600 bg-slate-900 text-slate-200 hover:bg-slate-800'
+                                  : 'border-stone-300 bg-white text-stone-800 hover:bg-stone-50'
                               }`}
                           >
                             {page}
@@ -835,7 +837,7 @@ export default function DashboardPage() {
                       size="sm"
                       disabled={safePage >= totalPages}
                       onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                      className="h-6 px-2 border-slate-600 text-slate-200 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                      className="h-6 px-2 border-stone-300 text-stone-800 bg-white hover:bg-stone-50 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       下一頁
                     </Button>
@@ -848,19 +850,19 @@ export default function DashboardPage() {
         )}
 
         {/* 出席 / 尚未簽到 / 不會出席 概況（三個圓餅圖） */}
-        <Card className="bg-slate-900/60 border border-slate-700 shadow-2xl mb-4">
+        <Card className="bg-white/60 border border-stone-200 shadow-2xl mb-4">
           <CardHeader>
             <CardTitle className="text-base font-semibold text-white tracking-wide flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
               出席與未出席概況
             </CardTitle>
-            <p className="text-xs text-slate-400">用圓餅圖快速掌握目前出席、尚未簽到與不會出席的比例</p>
+            <p className="text-xs text-stone-600">用圓餅圖快速掌握目前出席、尚未簽到與不會出席的比例</p>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {/* 出席率 */}
               <div className="flex flex-col items-center justify-center">
-                <div className="w-full max-w-[190px] rounded-2xl bg-slate-800/60 border border-slate-700 p-4 shadow-inner">
+                <div className="w-full max-w-[190px] rounded-2xl bg-stone-50/60 border border-stone-200 p-4 shadow-inner">
                   <div className="relative w-full aspect-square">
                     <div
                       className="absolute inset-0 rounded-full"
@@ -874,20 +876,20 @@ export default function DashboardPage() {
                             : 'conic-gradient(#e5e7eb 0deg 100%)',
                       }}
                     />
-                    <div className="absolute inset-5 rounded-full bg-slate-900 flex flex-col items-center justify-center border border-slate-700">
-                      <span className="text-[11px] uppercase tracking-wide text-slate-400">出席率</span>
+                    <div className="absolute inset-5 rounded-full bg-white flex flex-col items-center justify-center border border-stone-200">
+                      <span className="text-[11px] uppercase tracking-wide text-stone-600">出席率</span>
                       <span className="text-xl font-semibold text-white">
                         {rate.toFixed(1)}%
                       </span>
                     </div>
                   </div>
-                  <p className="mt-3 text-xs text-slate-300 text-center">目前已簽到</p>
+                  <p className="mt-3 text-xs text-stone-700 text-center">目前已簽到</p>
                 </div>
               </div>
 
               {/* 尚未簽到率 */}
               <div className="flex flex-col items-center justify-center">
-                <div className="w-full max-w-[190px] rounded-2xl bg-slate-800/60 border border-slate-700 p-4 shadow-inner">
+                <div className="w-full max-w-[190px] rounded-2xl bg-stone-50/60 border border-stone-200 p-4 shadow-inner">
                   <div className="relative w-full aspect-square">
                     {(() => {
                       const safeTotal = effectiveTotalForRate > 0 ? effectiveTotalForRate : 1;
@@ -907,8 +909,8 @@ export default function DashboardPage() {
                         />
                       );
                     })()}
-                    <div className="absolute inset-5 rounded-full bg-slate-900 flex flex-col items-center justify-center border border-slate-700">
-                      <span className="text-[11px] uppercase tracking-wide text-slate-400">尚未簽到率</span>
+                    <div className="absolute inset-5 rounded-full bg-white flex flex-col items-center justify-center border border-stone-200">
+                      <span className="text-[11px] uppercase tracking-wide text-stone-600">尚未簽到率</span>
                       <span className="text-xl font-semibold text-white">
                         {effectiveTotalForRate > 0
                           ? ((unchecked / effectiveTotalForRate) * 100).toFixed(1)
@@ -917,13 +919,13 @@ export default function DashboardPage() {
                       </span>
                     </div>
                   </div>
-                  <p className="mt-3 text-xs text-slate-300 text-center">仍需到場</p>
+                  <p className="mt-3 text-xs text-stone-700 text-center">仍需到場</p>
                 </div>
               </div>
 
               {/* 不會出席率 */}
               <div className="flex flex-col items-center justify-center">
-                <div className="w-full max-w-[190px] rounded-2xl bg-slate-800/60 border border-slate-700 p-4 shadow-inner">
+                <div className="w-full max-w-[190px] rounded-2xl bg-stone-50/60 border border-stone-200 p-4 shadow-inner">
                   <div className="relative w-full aspect-square">
                     {(() => {
                       const safeTotal = effectiveTotalForRate > 0 ? effectiveTotalForRate : 1;
@@ -943,8 +945,8 @@ export default function DashboardPage() {
                         />
                       );
                     })()}
-                    <div className="absolute inset-5 rounded-full bg-slate-900 flex flex-col items-center justify-center border border-slate-700">
-                      <span className="text-[11px] uppercase tracking-wide text-slate-400">不會出席率</span>
+                    <div className="absolute inset-5 rounded-full bg-white flex flex-col items-center justify-center border border-stone-200">
+                      <span className="text-[11px] uppercase tracking-wide text-stone-600">不會出席率</span>
                       <span className="text-xl font-semibold text-white">
                         {effectiveTotalForRate > 0
                           ? ((cancelled / effectiveTotalForRate) * 100).toFixed(1)
@@ -953,17 +955,17 @@ export default function DashboardPage() {
                       </span>
                     </div>
                   </div>
-                  <p className="mt-3 text-xs text-slate-300 text-center">已回報不會來</p>
+                  <p className="mt-3 text-xs text-stone-700 text-center">已回報不會來</p>
                 </div>
               </div>
             </div>
 
-            <div className="space-y-3 text-xs text-slate-200">
+            <div className="space-y-3 text-xs text-stone-800">
               <p className="leading-relaxed">
                 目前出席率為{' '}
                 <span className="text-emerald-300 font-semibold">{rate.toFixed(1)}%</span>，
                 尚未簽到約{' '}
-                <span className="text-slate-200 font-semibold">
+                <span className="text-stone-800 font-semibold">
                   {effectiveTotalForRate > 0
                     ? ((unchecked / effectiveTotalForRate) * 100).toFixed(1)
                     : '0.0'}
@@ -999,31 +1001,31 @@ export default function DashboardPage() {
         </Card>
 
         {/* 聯絡組比例區塊 */}
-        <Card className="bg-slate-900/60 border border-slate-700 shadow-2xl mb-4">
+        <Card className="bg-white/60 border border-stone-200 shadow-2xl mb-4">
           <CardHeader>
             <CardTitle className="text-base font-semibold text-white tracking-wide flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
               聯絡組比例分布
             </CardTitle>
-            <p className="text-xs text-slate-400">顯示各聯絡組的已出席與未出席人數分布</p>
+            <p className="text-xs text-stone-600">顯示各聯絡組的已出席與未出席人數分布</p>
           </CardHeader>
           <CardContent className="space-y-4">
             {contactGroupArray.length === 0 ? (
-              <p className="text-sm text-slate-400 text-center py-4">目前無聯絡組資料</p>
+              <p className="text-sm text-stone-600 text-center py-4">目前無聯絡組資料</p>
             ) : (
               <div className="space-y-3">
                 {contactGroupArray.map((item, idx) => (
                   <div key={idx} className="space-y-1">
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-slate-200 font-medium">{item.group}</span>
-                      <div className="text-slate-300 text-xs">
+                      <span className="text-stone-800 font-medium">{item.group}</span>
+                      <div className="text-stone-700 text-xs">
                         <span className="text-emerald-300 font-semibold">{item.checkedCount}</span> 已到 / 
                         <span className="text-sky-300 font-semibold ml-1">{item.lateCount}</span> 晚到 /
                         <span className="text-red-300 font-semibold ml-1">{item.uncheckedCount}</span> 未到
-                        <span className="text-slate-400 ml-2">({item.percentage.toFixed(1)}%)</span>
+                        <span className="text-stone-600 ml-2">({item.percentage.toFixed(1)}%)</span>
                       </div>
                     </div>
-                    <div className="w-full bg-slate-700 rounded-full h-2.5 overflow-hidden">
+                    <div className="w-full bg-stone-100 rounded-full h-2.5 overflow-hidden">
                       <div
                         className="bg-gradient-to-r from-emerald-500 to-emerald-400 h-2.5 rounded-full transition-all duration-500"
                         style={{ width: `${item.percentage}%` }}
@@ -1033,8 +1035,8 @@ export default function DashboardPage() {
                 ))}
               </div>
             )}
-            <div className="pt-3 border-t border-slate-700">
-              <p className="text-xs text-slate-300">
+            <div className="pt-3 border-t border-stone-200">
+              <p className="text-xs text-stone-700">
                 共有 <span className="font-semibold text-blue-300">{contactGroupArray.length}</span> 個聯絡組，
                 總計 <span className="font-semibold text-emerald-300">{checked}</span> 人已簽到、
                 <span className="font-semibold text-sky-300">{lateCount}</span> 人晚到、

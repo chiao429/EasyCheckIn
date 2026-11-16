@@ -18,6 +18,7 @@ export default function CheckInPage() {
   const params = useParams();
   const eventId = params.eventId as string;
   const searchParams = useSearchParams();
+  const configId = searchParams.get('configId') || undefined;
   const sheetFromQuery = searchParams.get('sheet');
   
   const [identifier, setIdentifier] = useState('');
@@ -45,11 +46,11 @@ export default function CheckInPage() {
     focusInput();
   };
 
-  const post = async (url: string, body: unknown) => {
+  const post = async (url: string, body: object) => {
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ ...body, configId, eventId }),
     });
     return response.json();
   };
@@ -126,7 +127,7 @@ export default function CheckInPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col items-center justify-center p-4">
+    <div className="min-h-screen craft-field flex flex-col items-center justify-center p-4">
       <Card className="w-full max-w-md shadow-xl mb-8">
         <CardHeader className="text-center space-y-2">
           <div className="mx-auto w-16 h-16 bg-primary rounded-full flex items-center justify-center mb-2">

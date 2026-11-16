@@ -28,6 +28,7 @@ export default function KidsDashboardPage() {
   const params = useParams();
   const eventId = params.eventId as string;
   const searchParams = useSearchParams();
+  const configId = searchParams.get('configId') || undefined;
   const sheetFromQuery = searchParams.get('sheet');
 
   const [attendees, setAttendees] = useState<Attendee[]>([]);
@@ -59,7 +60,7 @@ export default function KidsDashboardPage() {
 
     try {
       const response = await fetch(
-        `/api/kids/attendees?sheetId=${encodeURIComponent(effectiveSheetId)}&filter=all`
+        `/api/kids/attendees?sheetId=${encodeURIComponent(effectiveSheetId)}&filter=all&eventId=${encodeURIComponent(eventId)}${configId ? '&configId=' + encodeURIComponent(configId) : ''}`
       );
       const data = await response.json();
 
@@ -264,19 +265,19 @@ export default function KidsDashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 p-4 md:p-8 flex flex-col">
+    <div className="min-h-screen craft-field dashboard-dark p-4 md:p-8 flex flex-col">
       <div className="max-w-6xl mx-auto space-y-6 flex-1">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-100">
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-stone-950">
               兒童出席狀況儀表板
             </h1>
-            <p className="text-sm text-slate-300 mt-1">即時觀看兒童出席狀況</p>
+            <p className="text-sm text-stone-700 mt-1">即時觀看兒童出席狀況</p>
           </div>
           <div className="flex flex-col items-end gap-2">
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-2">
-                <span className="text-[11px] text-slate-300">小隊</span>
+                <span className="text-[11px] text-stone-700">小隊</span>
                 <select
                   value={selectedSquad}
                   onChange={(e) => {
@@ -284,7 +285,7 @@ export default function KidsDashboardPage() {
                     setCurrentPage(1);
                     setExpandedItem(null);
                   }}
-                  className="h-8 rounded-md border border-slate-600 bg-slate-800 px-2 text-[12px] text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="h-8 rounded-md border border-stone-300 bg-stone-50 px-2 text-[12px] text-stone-950 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 >
                   <option value="all">全部</option>
                   {squadOptions.map((s) => (
@@ -299,7 +300,7 @@ export default function KidsDashboardPage() {
                 size="sm"
                 onClick={fetchData}
                 disabled={loading}
-                className="border-slate-600 text-slate-200 bg-slate-800 hover:bg-slate-700"
+                className="border-stone-300 text-stone-800 bg-stone-50 hover:bg-stone-100"
               >
                 <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
                 重新整理
@@ -308,23 +309,23 @@ export default function KidsDashboardPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => setShowDetails((prev) => !prev)}
-                className={`border-slate-600 text-xs font-medium rounded-full px-3 py-1.5 transition-all
+                className={`border-stone-300 text-xs font-medium rounded-full px-3 py-1.5 transition-all
                   ${showDetails
                     ? 'bg-emerald-500 text-slate-900 hover:bg-emerald-400 shadow-md'
-                    : 'bg-slate-800 text-slate-200 hover:bg-slate-700'}`}
+                    : 'bg-stone-50 text-stone-800 hover:bg-stone-100'}`}
               >
                 <span className="mr-2">名單區塊</span>
                 <span
                   className={`inline-flex items-center w-10 h-5 rounded-full px-0.5 text-[10px] font-semibold transition-all
                     ${showDetails
-                      ? 'bg-emerald-900 text-emerald-300 justify-end'
-                      : 'bg-slate-500 text-slate-100 justify-start'}`}
+                      ? 'bg-emerald-100 text-emerald-900 justify-end'
+                      : 'bg-stone-200 text-stone-950 justify-start'}`}
                 >
                   <span className="w-4 h-4 rounded-full bg-white shadow" />
                 </span>
               </Button>
             </div>
-            <p className="text-[11px] text-slate-400">
+            <p className="text-[11px] text-stone-600">
               最後更新時間：{lastUpdated || '尚未載入'}
             </p>
           </div>
@@ -339,7 +340,7 @@ export default function KidsDashboardPage() {
         {/* KPI Cards */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <Card
-            className={`bg-slate-700 border-slate-600 transition-all cursor-pointer hover:shadow-md ${
+            className={`bg-stone-100 border-stone-300 transition-all cursor-pointer hover:shadow-md ${
               showDetails && listMode === 'all'
                 ? 'ring-4 ring-slate-200 ring-offset-2 ring-offset-slate-900 shadow-xl scale-[1.05] -translate-y-1'
                 : 'shadow-sm'
@@ -351,18 +352,18 @@ export default function KidsDashboardPage() {
           >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <div className="flex flex-col gap-1">
-                <div className="text-xs text-slate-400">總人數：{total}</div>
+                <div className="text-xs text-stone-600">總人數：{total}</div>
                 <CardTitle className="text-base md:text-lg font-medium text-white">
                   兒童應出席人數
                 </CardTitle>
               </div>
-              <Users className="h-4 w-4 text-slate-300" />
+              <Users className="h-4 w-4 text-stone-700" />
             </CardHeader>
             <CardContent>
-              <div className="text-5xl md:text-6xl font-extrabold text-slate-100 text-right leading-tight">
+              <div className="text-5xl md:text-6xl font-extrabold text-stone-950 text-right leading-tight">
                 {effectiveTotalForRate}
               </div>
-              <p className="text-xs text-slate-300 mt-1">不含已標記不會出席</p>
+              <p className="text-xs text-stone-700 mt-1">不含已標記不會出席</p>
             </CardContent>
           </Card>
 
@@ -435,10 +436,10 @@ export default function KidsDashboardPage() {
             </CardContent>
           </Card>
 
-          <Card className="cursor-default transition-shadow hover:shadow-md bg-slate-900/80 border border-slate-700">
+          <Card className="cursor-default transition-shadow hover:shadow-md bg-white/80 border border-stone-200">
             <CardHeader className="space-y-1 pb-2">
               <CardTitle className="text-sm font-medium text-white">聯繫狀態（未報到）</CardTitle>
-              <p className="text-[11px] text-slate-400">只統計尚未報到、未標記不會出席的名單</p>
+              <p className="text-[11px] text-stone-600">只統計尚未報到、未標記不會出席的名單</p>
             </CardHeader>
             <CardContent>
               <div className="flex flex-col gap-1 text-sm">
@@ -457,10 +458,10 @@ export default function KidsDashboardPage() {
                       if (!showDetails) setShowDetails(true);
                       handleChangeListMode(item.mode);
                     }}
-                    className={`flex items-baseline justify-between rounded-md px-2 py-1 -mx-2 text-left transition cursor-pointer hover:bg-slate-800
-                      ${showDetails && listMode === item.mode ? `bg-slate-800 ring-2 ${item.ring}` : ''}`}
+                    className={`flex items-baseline justify-between rounded-md px-2 py-1 -mx-2 text-left transition cursor-pointer hover:bg-stone-50
+                      ${showDetails && listMode === item.mode ? `bg-stone-50 ring-2 ${item.ring}` : ''}`}
                   >
-                    <span className="text-slate-300">{item.label}</span>
+                    <span className="text-stone-700">{item.label}</span>
                     <span className={`text-lg font-semibold ${item.color}`}>{item.value}</span>
                   </button>
                 ))}
@@ -471,17 +472,17 @@ export default function KidsDashboardPage() {
 
         {showDetails && (
           <Card
-            className={`cursor-default transition-shadow hover:shadow-md bg-slate-900/80 border border-slate-700
+            className={`cursor-default transition-shadow hover:shadow-md bg-white/80 border border-stone-200
               ${listMode === 'checked' && 'border-emerald-700 bg-emerald-950/60'}
               ${listMode === 'unchecked' && 'border-red-700 bg-red-950/60'}
               ${listMode === 'cancelled' && 'border-amber-700 bg-amber-950/60'}
-              ${listMode === 'contacted' && 'border-emerald-700 bg-slate-900/80'}
-              ${listMode === 'toContact' && 'border-amber-600 bg-slate-900/80'}`}
+              ${listMode === 'contacted' && 'border-emerald-700 bg-white/80'}
+              ${listMode === 'toContact' && 'border-amber-600 bg-white/80'}`}
           >
             <CardHeader>
               <CardTitle
                 className={`text-base md:text-lg font-semibold 
-                  ${listMode === 'all' && 'text-slate-100'}
+                  ${listMode === 'all' && 'text-stone-950'}
                   ${listMode === 'checked' && 'text-emerald-200'}
                   ${listMode === 'unchecked' && 'text-red-200'}
                   ${listMode === 'cancelled' && 'text-amber-200'}
@@ -498,7 +499,7 @@ export default function KidsDashboardPage() {
               <div className="mt-2 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                 {listMode === 'unchecked' && (
                   <div className="flex items-center justify-end">
-                    <label className="inline-flex items-center gap-2 text-xs text-slate-200">
+                    <label className="inline-flex items-center gap-2 text-xs text-stone-800">
                       <input
                         type="checkbox"
                         checked={showContactedInUnchecked}
@@ -506,7 +507,7 @@ export default function KidsDashboardPage() {
                           setShowContactedInUnchecked(e.target.checked);
                           setCurrentPage(1);
                         }}
-                        className="w-3 h-3 text-emerald-500 bg-slate-900 border-slate-600 focus:ring-emerald-500 focus:ring-2"
+                        className="w-3 h-3 text-emerald-500 bg-white border-stone-300 focus:ring-emerald-500 focus:ring-2"
                       />
                       只顯示待聯繫
                     </label>
@@ -521,7 +522,7 @@ export default function KidsDashboardPage() {
                       setCurrentPage(1);
                     }}
                     placeholder="輸入兒童姓名關鍵字進行搜尋"
-                    className="w-full md:w-72 rounded-md border border-slate-600 bg-slate-900 px-3 py-1.5 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                    className="w-full md:w-72 rounded-md border border-stone-300 bg-white px-3 py-1.5 text-sm text-stone-950 placeholder:text-stone-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                   />
                   <button
                     type="button"
@@ -532,15 +533,15 @@ export default function KidsDashboardPage() {
                     disabled={searchQuery.trim().length === 0}
                     className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-colors
                       ${searchQuery.trim().length === 0
-                        ? 'border-slate-700 text-slate-500 bg-slate-800 cursor-not-allowed'
-                        : 'border-slate-500 text-slate-100 bg-slate-800 hover:bg-slate-700'}`}
+                        ? 'border-stone-200 text-stone-600 bg-stone-50 cursor-not-allowed'
+                        : 'border-stone-400 text-stone-950 bg-stone-50 hover:bg-stone-100'}`}
                   >
                     清除
                   </button>
                 </div>
                 <p
                   className={`text-xs 
-                    ${listMode === 'all' && 'text-slate-100'}
+                    ${listMode === 'all' && 'text-stone-950'}
                     ${listMode === 'checked' && 'text-emerald-300'}
                     ${listMode === 'unchecked' && 'text-red-300'}
                     ${listMode === 'cancelled' && 'text-amber-300'}
@@ -558,7 +559,7 @@ export default function KidsDashboardPage() {
             </CardHeader>
             <CardContent>
               {detailList.length === 0 ? (
-                <p className="text-sm text-slate-400 text-center py-4">
+                <p className="text-sm text-stone-600 text-center py-4">
                   目前尚無符合條件的紀錄
                 </p>
               ) : (
@@ -571,15 +572,15 @@ export default function KidsDashboardPage() {
                       return (
                         <div
                           key={`${itemKey}-${idx}`}
-                          className="bg-slate-800 rounded-md border border-slate-700 overflow-hidden"
+                          className="bg-stone-50 rounded-md border border-stone-200 overflow-hidden"
                         >
                           <div
-                            className="flex items-center justify-between py-2 px-3 text-sm cursor-pointer hover:bg-slate-750 transition-colors"
+                            className="flex items-center justify-between py-2 px-3 text-sm cursor-pointer hover:bg-stone-100 transition-colors"
                             onClick={() => setExpandedItem(isExpanded ? null : itemKey)}
                           >
                             <div>
-                              <p className="font-medium text-slate-100">
-                                <span className="mr-2 text-slate-400">{a.序號}</span>
+                              <p className="font-medium text-stone-950">
+                                <span className="mr-2 text-stone-600">{a.序號}</span>
                                 {a.姓名}
                                 {a.已到 !== 'TRUE' && a.已到 !== 'CANCELLED' && (
                                   a.需要聯繫 === 'TRUE' ? (
@@ -593,7 +594,7 @@ export default function KidsDashboardPage() {
                                   )
                                 )}
                               </p>
-                              <p className="text-[11px] text-slate-400 mt-0.5">
+                              <p className="text-[11px] text-stone-600 mt-0.5">
                                 {a.到達時間 || '-'}
                               </p>
                             </div>
@@ -602,7 +603,7 @@ export default function KidsDashboardPage() {
                                 <span className="text-[11px] text-emerald-300">已報到</span>
                               )}
                               {(listMode === 'unchecked' || listMode === 'contacted' || listMode === 'toContact') && (
-                                <span className="text-[11px] text-slate-400">未報到</span>
+                                <span className="text-[11px] text-stone-600">未報到</span>
                               )}
                               {listMode === 'cancelled' && (
                                 <span className="text-[11px] text-amber-300">不會出席</span>
@@ -616,11 +617,11 @@ export default function KidsDashboardPage() {
                                     <span className="text-amber-300">不會出席</span>
                                   )}
                                   {a.已到 !== 'TRUE' && a.已到 !== 'CANCELLED' && (
-                                    <span className="text-slate-300">未報到</span>
+                                    <span className="text-stone-700">未報到</span>
                                   )}
                                 </span>
                               )}
-                              <span className="text-slate-400 text-xs">
+                              <span className="text-stone-600 text-xs">
                                 {isExpanded ? '▲' : '▼'}
                               </span>
                             </div>
@@ -628,7 +629,7 @@ export default function KidsDashboardPage() {
                           
                           {/* 展開的詳細資料 */}
                           {isExpanded && a.詳細欄位 && a.詳細欄位.length > 0 && (
-                            <div className="px-3 py-2 border-t border-slate-700 bg-slate-850">
+                            <div className="px-3 py-2 border-t border-stone-200 bg-white">
                               <div className="space-y-1 text-xs">
                                 {a.詳細欄位.map((field, fieldIdx) => {
                                   const hasValue = field.值 && field.值.trim().length > 0;
@@ -637,10 +638,10 @@ export default function KidsDashboardPage() {
                                   
                                   return (
                                     <div key={fieldIdx} className="flex justify-between gap-2">
-                                      <span className="text-slate-400">
+                                      <span className="text-stone-600">
                                         {field.標題 || `欄位 ${fieldIdx + 1}`}：
                                       </span>
-                                      <span className="text-slate-200 break-all">
+                                      <span className="text-stone-800 break-all">
                                         {field.值 || '-'}
                                       </span>
                                     </div>
@@ -653,7 +654,7 @@ export default function KidsDashboardPage() {
                       );
                     })}
                   </div>
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-3 text-[11px] text-slate-300">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-3 text-[11px] text-stone-700">
                     <div className="flex items-center gap-2">
                       <span>每頁</span>
                       <select
@@ -663,7 +664,7 @@ export default function KidsDashboardPage() {
                           setPageSize(Number.isNaN(size) ? 5 : size);
                           setCurrentPage(1);
                         }}
-                        className="rounded border border-slate-600 bg-slate-900 px-2 py-0.5 text-[11px] text-slate-200 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                        className="rounded border border-stone-300 bg-white px-2 py-0.5 text-[11px] text-stone-800 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                       >
                         <option value={5}>5</option>
                         <option value={10}>10</option>
@@ -679,7 +680,7 @@ export default function KidsDashboardPage() {
                         size="sm"
                         disabled={safePage <= 1}
                         onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                        className="h-6 px-2 border-slate-600 text-slate-200 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                        className="h-6 px-2 border-stone-300 text-stone-800 bg-white hover:bg-stone-50 disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         上一頁
                       </Button>
@@ -697,7 +698,7 @@ export default function KidsDashboardPage() {
                               className={`min-w-[28px] h-6 rounded-full border text-[11px] px-2 transition-colors
                                 ${page === safePage
                                   ? 'border-emerald-400 bg-emerald-500/20 text-emerald-200'
-                                  : 'border-slate-600 bg-slate-900 text-slate-200 hover:bg-slate-800'}`}
+                                  : 'border-stone-300 bg-white text-stone-800 hover:bg-stone-50'}`}
                             >
                               {page}
                             </button>
@@ -708,7 +709,7 @@ export default function KidsDashboardPage() {
                         size="sm"
                         disabled={safePage >= totalPages}
                         onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                        className="h-6 px-2 border-slate-600 text-slate-200 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                        className="h-6 px-2 border-stone-300 text-stone-800 bg-white hover:bg-stone-50 disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         下一頁
                       </Button>
@@ -720,7 +721,7 @@ export default function KidsDashboardPage() {
           </Card>
         )}
 
-        <Card className="bg-slate-900/60 border border-slate-700 shadow-2xl mb-4">
+        <Card className="bg-white/60 border border-stone-200 shadow-2xl mb-4">
           <CardHeader>
             <CardTitle className="text-base font-semibold text-white tracking-wide flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -730,7 +731,7 @@ export default function KidsDashboardPage() {
           <CardContent className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="flex flex-col items-center justify-center">
-                <div className="w-full max-w-[190px] rounded-2xl bg-slate-800/60 border border-slate-700 p-4 shadow-inner">
+                <div className="w-full max-w-[190px] rounded-2xl bg-stone-50/60 border border-stone-200 p-4 shadow-inner">
                   <div className="relative w-full aspect-square">
                     <div
                       className="absolute inset-0 rounded-full"
@@ -744,8 +745,8 @@ export default function KidsDashboardPage() {
                             : 'conic-gradient(#e5e7eb 0deg 100%)',
                       }}
                     />
-                    <div className="absolute inset-5 rounded-full bg-slate-900 flex flex-col items-center justify-center border border-slate-700">
-                      <span className="text-[11px] uppercase tracking-wide text-slate-400">
+                    <div className="absolute inset-5 rounded-full bg-white flex flex-col items-center justify-center border border-stone-200">
+                      <span className="text-[11px] uppercase tracking-wide text-stone-600">
                         出席率
                       </span>
                       <span className="text-xl font-semibold text-white">
@@ -753,12 +754,12 @@ export default function KidsDashboardPage() {
                       </span>
                     </div>
                   </div>
-                  <p className="mt-3 text-xs text-slate-300 text-center">目前已報到兒童比例</p>
+                  <p className="mt-3 text-xs text-stone-700 text-center">目前已報到兒童比例</p>
                 </div>
               </div>
 
               <div className="flex flex-col items-center justify-center">
-                <div className="w-full max-w-[190px] rounded-2xl bg-slate-800/60 border border-slate-700 p-4 shadow-inner">
+                <div className="w-full max-w-[190px] rounded-2xl bg-stone-50/60 border border-stone-200 p-4 shadow-inner">
                   <div className="relative w-full aspect-square">
                     {(() => {
                       const safeTotal = effectiveTotalForRate > 0 ? effectiveTotalForRate : 1;
@@ -778,8 +779,8 @@ export default function KidsDashboardPage() {
                         />
                       );
                     })()}
-                    <div className="absolute inset-5 rounded-full bg-slate-900 flex flex-col items-center justify-center border border-slate-700">
-                      <span className="text-[11px] uppercase tracking-wide text-slate-400">
+                    <div className="absolute inset-5 rounded-full bg-white flex flex-col items-center justify-center border border-stone-200">
+                      <span className="text-[11px] uppercase tracking-wide text-stone-600">
                         尚未簽到率
                       </span>
                       <span className="text-xl font-semibold text-white">
@@ -790,12 +791,12 @@ export default function KidsDashboardPage() {
                       </span>
                     </div>
                   </div>
-                  <p className="mt-3 text-xs text-slate-300 text-center">仍未到場的兒童</p>
+                  <p className="mt-3 text-xs text-stone-700 text-center">仍未到場的兒童</p>
                 </div>
               </div>
 
               <div className="flex flex-col items-center justify-center">
-                <div className="w-full max-w-[190px] rounded-2xl bg-slate-800/60 border border-slate-700 p-4 shadow-inner">
+                <div className="w-full max-w-[190px] rounded-2xl bg-stone-50/60 border border-stone-200 p-4 shadow-inner">
                   <div className="relative w-full aspect-square">
                     {(() => {
                       const safeTotal = effectiveTotalForRate > 0 ? effectiveTotalForRate : 1;
@@ -815,8 +816,8 @@ export default function KidsDashboardPage() {
                         />
                       );
                     })()}
-                    <div className="absolute inset-5 rounded-full bg-slate-900 flex flex-col items-center justify-center border border-slate-700">
-                      <span className="text-[11px] uppercase tracking-wide text-slate-400">
+                    <div className="absolute inset-5 rounded-full bg-white flex flex-col items-center justify-center border border-stone-200">
+                      <span className="text-[11px] uppercase tracking-wide text-stone-600">
                         不會出席率
                       </span>
                       <span className="text-xl font-semibold text-white">
@@ -827,17 +828,17 @@ export default function KidsDashboardPage() {
                       </span>
                     </div>
                   </div>
-                  <p className="mt-3 text-xs text-slate-300 text-center">已標記不會出席的兒童比例</p>
+                  <p className="mt-3 text-xs text-stone-700 text-center">已標記不會出席的兒童比例</p>
                 </div>
               </div>
             </div>
 
-            <div className="space-y-3 text-xs text-slate-200">
+            <div className="space-y-3 text-xs text-stone-800">
               <p className="leading-relaxed">
                 目前兒童出席率為{' '}
                 <span className="text-emerald-300 font-semibold">{rate.toFixed(1)}%</span>
                 ，尚未簽到約{' '}
-                <span className="text-slate-200 font-semibold">
+                <span className="text-stone-800 font-semibold">
                   {effectiveTotalForRate > 0
                     ? ((unchecked / effectiveTotalForRate) * 100).toFixed(1)
                     : '0.0'}

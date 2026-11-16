@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { findKidsFamily } from '@/lib/google-sheets';
+import { resolveRequestedSheet } from '@/lib/year-registry';
 
 // 兒童版：查詢與此列家長電話相同的兄弟姊妹
 export async function POST(request: NextRequest) {
   try {
-    const { sheetId, rowIndex } = (await request.json()) as { sheetId?: string; rowIndex?: number };
+    const body = (await request.json()) as { sheetId?: string; rowIndex?: number; eventId?: string; configId?: string };
+    const { rowIndex, eventId, configId } = body;
+    const sheetId = await resolveRequestedSheet(eventId || null, body.sheetId || null, configId);
     if (!sheetId || !Number.isInteger(rowIndex) || (rowIndex as number) < 2) {
       return NextResponse.json({ success: false, message: '缺少必要參數' }, { status: 400 });
     }

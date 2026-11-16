@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { SiteFooter } from '@/components/SiteFooter';
-import { Users, UserCheck, UserX, Search, RefreshCw, Download, Lock } from 'lucide-react';
+import { AttendeeImport } from '@/components/admin/AttendeeImport';
+import { Users, UserCheck, UserX, Search, RefreshCw, Download, Lock, Eye, EyeOff, Loader2 } from 'lucide-react';
 
 const KIDS_ADMIN_SESSION_KEY = 'easycheckin_kids_admin_session';
 const ADMIN_SESSION_DURATION_MS = 15 * 60 * 1000;
@@ -17,16 +18,21 @@ interface Attendee {
   到達時間: string;
   已到: string;
   需要聯繫?: string;
+  詳細欄位?: Array<{ 標題: string; 值: string }>;
 }
 
 export default function KidsAdminPage() {
   const params = useParams();
   const eventId = params.eventId as string;
   const searchParams = useSearchParams();
+  const configId = searchParams.get('configId') || undefined;
   const sheetFromQuery = searchParams.get('sheet');
 
   const [authenticated, setAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [loginSubmitting, setLoginSubmitting] = useState(false);
+  const [enteringAdmin, setEnteringAdmin] = useState(false);
   const [activeTab, setActiveTab] = useState<
     'all' | 'checked' | 'unchecked' | 'cancelled' | 'search'
   >('all');
@@ -66,13 +72,14 @@ export default function KidsAdminPage() {
       return;
     }
 
+    setLoginSubmitting(true);
     try {
       const response = await fetch('/api/admin/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ password: password.trim(), eventId }),
+        body: JSON.stringify({ password: password.trim(), eventId, configId, sheetId: sheetFromQuery }),
       });
 
       const data = await response.json();
@@ -88,14 +95,16 @@ export default function KidsAdminPage() {
           console.error('Failed to persist kids admin session:', e);
         }
         setSessionExpiry(expiresAt);
+        setEnteringAdmin(true);
         setAuthenticated(true);
-        fetchAttendees('all');
       } else {
         alert(data.message || '密碼錯誤');
       }
     } catch (error) {
       console.error('Kids admin login error:', error);
       alert('登入時發生錯誤，請稍後再試');
+    } finally {
+      setLoginSubmitting(false);
     }
   };
 
@@ -105,7 +114,7 @@ export default function KidsAdminPage() {
       const response = await fetch(
         `/api/kids/attendees?sheetId=${encodeURIComponent(
           effectiveSheetId
-        )}&filter=${filter}&eventId=${encodeURIComponent(eventId)}`
+        )}&filter=${filter}&eventId=${encodeURIComponent(eventId)}${configId ? '&configId=' + encodeURIComponent(configId) : ''}`
       );
       const data = await response.json();
 
@@ -118,6 +127,7 @@ export default function KidsAdminPage() {
       console.error('Kids admin: error fetching attendees:', error);
     } finally {
       setLoading(false);
+      setEnteringAdmin(false);
     }
   };
 
@@ -129,7 +139,7 @@ export default function KidsAdminPage() {
       const response = await fetch(
         `/api/kids/search?sheetId=${encodeURIComponent(
           effectiveSheetId
-        )}&query=${encodeURIComponent(searchQuery)}&eventId=${encodeURIComponent(eventId)}`
+        )}&query=${encodeURIComponent(searchQuery)}&eventId=${encodeURIComponent(eventId)}${configId ? '&configId=' + encodeURIComponent(configId) : ''}`
       );
       const data = await response.json();
 
@@ -175,6 +185,7 @@ export default function KidsAdminPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          configId,
           sheetId: effectiveSheetId,
           identifier,
           eventId,
@@ -207,6 +218,7 @@ export default function KidsAdminPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          configId,
           sheetId: effectiveSheetId,
           identifier,
           eventId,
@@ -280,6 +292,7 @@ export default function KidsAdminPage() {
             },
             body: JSON.stringify({
               identifier: `KIDS-LOADTEST-${index + 1}`,
+              configId,
               sheetId: effectiveSheetId,
             }),
           });
@@ -355,6 +368,7 @@ export default function KidsAdminPage() {
             },
             body: JSON.stringify({
               identifier,
+              configId,
               sheetId: effectiveSheetId,
             }),
           });
@@ -437,7 +451,7 @@ export default function KidsAdminPage() {
       // 讀取此活動對應的活動試算表與日誌試算表連結
       (async () => {
         try {
-          const res = await fetch(`/api/admin/event-sheets?eventId=${encodeURIComponent(eventId)}`);
+          const res = await fetch(`/api/admin/event-sheets?eventId=${encodeURIComponent(eventId)}&sheetId=${encodeURIComponent(sheetFromQuery || '')}${configId ? '&configId=' + encodeURIComponent(configId) : ''}`);
           const data = await res.json();
           if (data.success && data.data) {
             setActivitySheetUrl(data.data.activitySheetUrl || data.data.activitySheetLink || null);
@@ -452,7 +466,7 @@ export default function KidsAdminPage() {
 
   if (!authenticated) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex flex-col items-center justify-center p-4">
+      <div className="min-h-screen craft-field flex flex-col items-center justify-center p-4">
         <Card className="w-full max-w-md shadow-xl mb-8">
           <CardHeader className="text-center space-y-2">
             <div className="mx-auto w-16 h-16 bg-slate-900 rounded-full flex items-center justify-center mb-2">
@@ -466,16 +480,28 @@ export default function KidsAdminPage() {
 
           <CardContent>
             <form onSubmit={handleLogin} className="space-y-4">
-              <Input
-                type="password"
-                placeholder="管理員密碼"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="text-lg h-12"
-                autoFocus
-              />
-              <Button type="submit" className="w-full h-12 text-lg">
-                登入
+              <div className="relative">
+                <Input
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="管理員密碼"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="text-lg h-12 pr-12"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((visible) => !visible)}
+                  aria-label={showPassword ? '隱藏管理員密碼' : '顯示管理員密碼'}
+                  title={showPassword ? '隱藏密碼' : '顯示密碼'}
+                  className="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-slate-500 hover:text-slate-800"
+                >
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
+              </div>
+              <Button type="submit" className="w-full h-12 text-lg" disabled={loginSubmitting}>
+                {loginSubmitting && <Loader2 className="w-5 h-5 mr-2 animate-spin" />}
+                {loginSubmitting ? '正在驗證…' : '登入'}
               </Button>
             </form>
           </CardContent>
@@ -486,7 +512,7 @@ export default function KidsAdminPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 md:p-8 flex flex-col">
+    <div className="min-h-screen craft-field p-4 md:p-8 flex flex-col">
       <div className="max-w-7xl mx-auto space-y-6 flex-1">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
@@ -536,6 +562,8 @@ export default function KidsAdminPage() {
             </Button>
           </div>
         </div>
+
+        <AttendeeImport eventId={eventId} configId={configId} version="兒童" />
 
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <Card
@@ -659,7 +687,7 @@ export default function KidsAdminPage() {
             {loading ? (
               <div className="text-center py-12">
                 <RefreshCw className="w-8 h-8 animate-spin mx-auto text-slate-400" />
-                <p className="mt-2 text-slate-600">載入中...</p>
+                <p className="mt-2 text-slate-600">{enteringAdmin ? '登入成功，正在載入活動資料…' : '載入中...'}</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -679,6 +707,8 @@ export default function KidsAdminPage() {
                     dataSource = attendees;
                   }
 
+                  const detailsBySerial = new Map(attendees.map((a) => [a.序號, a.詳細欄位]));
+                  const detailHeaders = attendees.find((a) => a.詳細欄位?.length)?.詳細欄位?.map((f) => f.標題) || [];
                   const totalItems = dataSource.length;
                   const effectivePageSize = pageSize === 0 ? totalItems : pageSize;
                   const totalPages = Math.max(1, Math.ceil(totalItems / Math.max(effectivePageSize, 1)));
@@ -695,6 +725,7 @@ export default function KidsAdminPage() {
                             <th className="text-left p-3 font-semibold">兒童姓名</th>
                             <th className="text-left p-3 font-semibold">到達時間</th>
                             <th className="text-left p-3 font-semibold">狀態</th>
+                            {detailHeaders.map((header) => <th key={header} className="text-left p-3 font-semibold whitespace-nowrap">{header}</th>)}
                             <th className="text-left p-3 font-semibold w-40">操作</th>
                           </tr>
                         </thead>
@@ -722,6 +753,7 @@ export default function KidsAdminPage() {
                                   </span>
                                 )}
                               </td>
+                              {detailHeaders.map((header) => <td key={header} className="p-3 whitespace-nowrap">{detailsBySerial.get(attendee.序號)?.find((field) => field.標題 === header)?.值 || '-'}</td>)}
                               <td className="p-3">
                                 <div className="flex flex-wrap gap-2 text-xs">
                                   {attendee.已到 === 'TRUE' && (

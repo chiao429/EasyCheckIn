@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { findFamily } from '@/lib/google-sheets';
+import { resolveRequestedSheet } from '@/lib/year-registry';
 
 // 自助報到：查詢輸入的人與聯絡電話相同的家人
 export async function POST(request: NextRequest) {
   try {
-    const { identifier, sheetId } = (await request.json()) as { identifier?: string; sheetId?: string };
+    const { identifier, sheetId: requestedSheetId, eventId, configId } = (await request.json()) as { identifier?: string; sheetId?: string; eventId?: string; configId?: string };
+    const sheetId = await resolveRequestedSheet(eventId || null, requestedSheetId || null, configId);
     if (!identifier || !sheetId) {
       return NextResponse.json({ success: false, message: '缺少必要參數' }, { status: 400 });
     }

@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { searchKidsAttendee, logManagerAction } from '@/lib/google-sheets';
+import { resolveRequestedSheet } from '@/lib/year-registry';
 
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
-    const sheetId = searchParams.get('sheetId');
+    const sheetId = await resolveRequestedSheet(searchParams.get('eventId'), searchParams.get('sheetId'), searchParams.get('configId'));
     const query = searchParams.get('query');
     const eventId = searchParams.get('eventId') || undefined;
 

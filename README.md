@@ -95,6 +95,16 @@ NEXT_PUBLIC_BASE_URL=http://localhost:3000
 - `GOOGLE_PRIVATE_KEY` 需要保留換行符號 `\n`
 - `GOOGLE_EVENT_CONFIG_SHEET_ID` 是活動設定表的 Sheet ID
 
+### 年度設定管理（選用）
+
+建立「年度設定」分頁，A1:J1 依序填入 `configId`、`年度`、`顯示名稱`、`活動設定試算表 ID`、`Drive 資料夾連結`、`狀態`、`接受簽到`、`建立時間`、`驗證時間`、`已驗證活動對應`。B2 填入目前啟用的 `configId`，第 4 列起填年度資料。L2 由系統存放加密後的 Google OAuth refresh token，勿手動修改或清除。將試算表命名為「年度登記表」並放在 Drive 根資料夾第一層，設定 `GOOGLE_YEAR_ROOT_FOLDER_ID`；既有部署也可用 `GOOGLE_YEAR_REGISTRY_SHEET_ID` 直接指定。另設定 `YEAR_ADMIN_PASSWORD`、隨機的 `YEAR_ADMIN_SESSION_SECRET`、`GOOGLE_OAUTH_CLIENT_ID`、`GOOGLE_OAUTH_CLIENT_SECRET`，以及 OAuth 用戶端允許的 `GOOGLE_OAUTH_REDIRECT_URI`（預設 `http://localhost:3000/api/admin/years/oauth/callback`）。在 Google Cloud OAuth 用戶端中登記完全相同的回呼網址。管理員登入 `/years` 後按「連結 Google 帳號」，使用有權限在年度 Drive 資料夾新增檔案的帳號完成授權；此 OAuth 帳號建立年度活動設定表，服務帳號仍負責年度登記表與活動資料的 Sheets 讀寫。OAuth refresh token 以 `YEAR_ADMIN_SESSION_SECRET` 加密儲存在登記表 L2，因此輪替該密鑰會使既有授權失效，需重新連結。服務帳號仍需可寫入登記表、名單與操作紀錄，可讀取活動設定表，並在 Google Cloud 啟用 Drive API 以確認檔案權限。
+
+1. 在 `/years` 登記原有 2025 活動設定表（年度例如 `2025`、名稱 `2025 聖誕午會`），按「驗證」後啟用。保留 `GOOGLE_EVENT_CONFIG_SHEET_ID` 指向原表，舊 QR Code 依它及原網址的名單 ID 解析。
+2. 新增年度時只需貼 Drive 資料夾連結，系統會在資料夾中建立新的「活動設定」試算表（含「工作表1」和「資訊」分頁）。再填入各活動的名單與操作紀錄連結，完成檢查後驗證並啟用。驗證會固定活動 ID、版本及名單與紀錄對應。換名單時建立新設定並重發 QR Code。
+3. 回切時選擇 2025 再按「啟用／回切」。兩份名單的記錄留在原表，可獨立設定是否接受新簽到。請依序操作切換，Sheets 的前後回讀可偵測部分衝突，但無法保證多個部署實例之間的互斥。
+
+兩個年度來源變數都未設定時，首頁活動列表沿用 `GOOGLE_EVENT_CONFIG_SHEET_ID`。
+
 ### 5. 啟動開發伺服器
 
 ```bash
@@ -192,9 +202,9 @@ EasyCheck/
 
 ## 常見問題
 
-### Q: 如何修改管理後台密碼？
+### Q: 如何設定管理後台密碼？
 
-A: 在 `.env` 檔案中修改 `ADMIN_PASSWORD` 和 `NEXT_PUBLIC_ADMIN_PASSWORD`。
+A: 年度設定架構的部署必須在伺服器端 `.env` 設定 `ADMIN_PASSWORD`。尚未遷移到年度設定的舊單年度部署，才會暫時從活動設定表 `資訊!A2` 讀取。請不要使用 `NEXT_PUBLIC_ADMIN_PASSWORD`，因為 `NEXT_PUBLIC_` 變數會暴露給瀏覽器。你可以自行把同一組密碼存入 Google 密碼管理員；應用程式不會讀取或寫入密碼管理員。
 
 ### Q: 可以同時舉辦多個活動嗎？
 

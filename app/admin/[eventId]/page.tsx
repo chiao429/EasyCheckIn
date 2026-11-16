@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { SiteFooter } from '@/components/SiteFooter';
+import { AttendeeImport } from '@/components/admin/AttendeeImport';
 import { 
   Users, 
   UserCheck, 
@@ -13,11 +14,22 @@ import {
   Search, 
   RefreshCw,
   Download,
-  Lock
+  Lock,
+  Eye,
+  EyeOff,
+  Loader2,
 } from 'lucide-react';
 
 const ADMIN_SESSION_KEY = 'easycheckin_admin_session';
 const ADMIN_SESSION_DURATION_MS = 15 * 60 * 1000;
+
+function formatContactPhone(value: string) {
+  let digits = value.replace(/\D/g, '');
+  if (digits.length === 9) digits = `0${digits}`;
+  return digits.length === 10
+    ? `${digits.slice(0, 4)}-${digits.slice(4, 7)}-${digits.slice(7)}`
+    : '-';
+}
 
 interface DetailField {
   標題: string;
@@ -36,10 +48,14 @@ export default function AdminPage() {
   const params = useParams();
   const eventId = params.eventId as string;
   const searchParams = useSearchParams();
+  const configId = searchParams.get('configId') || undefined;
   const sheetFromQuery = searchParams.get('sheet');
   
   const [authenticated, setAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [loginSubmitting, setLoginSubmitting] = useState(false);
+  const [enteringAdmin, setEnteringAdmin] = useState(false);
   const [activeTab, setActiveTab] = useState<
     'all' | 'checked' | 'unchecked' | 'cancelled' | 'search'
   >('all');
@@ -80,6 +96,7 @@ export default function AdminPage() {
       return;
     }
 
+    setLoginSubmitting(true);
     let lastLimitedMessage: string | null = null;
     try {
       const response = await fetch('/api/admin/login', {
@@ -87,7 +104,7 @@ export default function AdminPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ password: password.trim(), eventId }),
+        body: JSON.stringify({ password: password.trim(), eventId, configId, sheetId: sheetFromQuery }),
       });
 
       const data = await response.json();
@@ -103,14 +120,16 @@ export default function AdminPage() {
           console.error('Failed to persist admin session:', e);
         }
         setSessionExpiry(expiresAt);
+        setEnteringAdmin(true);
         setAuthenticated(true);
-        fetchAttendees('all');
       } else {
         alert(data.message || '密碼錯誤');
       }
     } catch (error) {
       console.error('Admin login error:', error);
       alert('登入時發生錯誤，請稍後再試');
+    } finally {
+      setLoginSubmitting(false);
     }
   };
 
@@ -125,6 +144,7 @@ export default function AdminPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          configId,
           sheetId: sheetFromQuery || process.env.GOOGLE_SHEET_ID || eventId,
           identifier,
           eventId,
@@ -157,6 +177,7 @@ export default function AdminPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          configId,
           sheetId: sheetFromQuery || process.env.GOOGLE_SHEET_ID || eventId,
           identifier,
           eventId,
@@ -186,7 +207,7 @@ export default function AdminPage() {
     setLoading(true);
     try {
       const response = await fetch(
-        `/api/attendees?sheetId=${sheetFromQuery || process.env.GOOGLE_SHEET_ID || eventId}&filter=${filter}&eventId=${encodeURIComponent(eventId)}`
+        `/api/attendees?sheetId=${sheetFromQuery || process.env.GOOGLE_SHEET_ID || eventId}&filter=${filter}&eventId=${encodeURIComponent(eventId)}${configId ? '&configId=' + encodeURIComponent(configId) : ''}`
       );
       const data = await response.json();
       
@@ -199,6 +220,7 @@ export default function AdminPage() {
       console.error('Error fetching attendees:', error);
     } finally {
       setLoading(false);
+      setEnteringAdmin(false);
     }
   };
 
@@ -210,7 +232,7 @@ export default function AdminPage() {
       const response = await fetch(
         `/api/search?sheetId=${sheetFromQuery || process.env.GOOGLE_SHEET_ID || eventId}&query=${encodeURIComponent(
           searchQuery
-        )}&eventId=${encodeURIComponent(eventId)}`
+        )}&eventId=${encodeURIComponent(eventId)}${configId ? '&configId=' + encodeURIComponent(configId) : ''}`
       );
       const data = await response.json();
       
@@ -262,6 +284,7 @@ export default function AdminPage() {
         },
         body: JSON.stringify({
           identifier: testIdentifier.trim(),
+          configId,
           sheetId: sheetFromQuery || process.env.GOOGLE_SHEET_ID || eventId,
         }),
       });
@@ -291,7 +314,7 @@ export default function AdminPage() {
       const response = await fetch(
         `/api/attendees?sheetId=${sheetFromQuery || process.env.GOOGLE_SHEET_ID || eventId}&filter=all&eventId=${encodeURIComponent(
           eventId
-        )}`
+        )}${configId ? '&configId=' + encodeURIComponent(configId) : ''}`
       );
       const data = await response.json();
 
@@ -330,6 +353,7 @@ export default function AdminPage() {
             },
             body: JSON.stringify({
               identifier: `LOADTEST-${index + 1}`,
+              configId,
               sheetId: sheetFromQuery || process.env.GOOGLE_SHEET_ID || eventId,
             }),
           });
@@ -369,7 +393,7 @@ export default function AdminPage() {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            eventId,
+            configId, sheetId: sheetFromQuery, eventId,
             type: 'loadtest',
             success,
             failed,
@@ -430,6 +454,7 @@ export default function AdminPage() {
             },
             body: JSON.stringify({
               identifier,
+              configId,
               sheetId: sheetFromQuery || process.env.GOOGLE_SHEET_ID || eventId,
             }),
           });
@@ -465,7 +490,7 @@ export default function AdminPage() {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            eventId,
+            configId, sheetId: sheetFromQuery, eventId,
             type: 'random_write',
             success,
             failed,
@@ -525,6 +550,7 @@ export default function AdminPage() {
             },
             body: JSON.stringify({
               identifier,
+              configId,
               sheetId: sheetFromQuery || process.env.GOOGLE_SHEET_ID || eventId,
             }),
           });
@@ -574,7 +600,7 @@ export default function AdminPage() {
       ...data.map((a) => {
         const status = a.已到 === 'TRUE' ? '已簽到' : a.已到 === 'CANCELLED' ? '取消' : '未簽到';
         const extraValues = extraHeaders.map((h) => {
-          const field = a.詳細欄位?.find((f) => f.標題 === h);
+          const field = a.詳細欄位?.find((f) => f.標題.trim() === h);
           return field?.值 ?? '';
         });
         return [a.序號, a.姓名, a.到達時間, status, ...extraValues];
@@ -644,7 +670,7 @@ export default function AdminPage() {
       // 讀取此活動對應的活動試算表與日誌試算表連結
       (async () => {
         try {
-          const res = await fetch(`/api/admin/event-sheets?eventId=${encodeURIComponent(eventId)}`);
+          const res = await fetch(`/api/admin/event-sheets?eventId=${encodeURIComponent(eventId)}&sheetId=${encodeURIComponent(sheetFromQuery || '')}${configId ? '&configId=' + encodeURIComponent(configId) : ''}`);
           const data = await res.json();
           if (data.success && data.data) {
             setActivitySheetUrl(data.data.activitySheetUrl || data.data.activitySheetLink || null);
@@ -659,7 +685,7 @@ export default function AdminPage() {
 
   if (!authenticated) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex flex-col items-center justify-center p-4">
+      <div className="min-h-screen craft-field flex flex-col items-center justify-center p-4">
         <Card className="w-full max-w-md shadow-xl mb-8">
           <CardHeader className="text-center space-y-2">
             <div className="mx-auto w-16 h-16 bg-slate-900 rounded-full flex items-center justify-center mb-2">
@@ -673,16 +699,28 @@ export default function AdminPage() {
           
           <CardContent>
             <form onSubmit={handleLogin} className="space-y-4">
-              <Input
-                type="password"
-                placeholder="管理員密碼"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="text-lg h-12"
-                autoFocus
-              />
-              <Button type="submit" className="w-full h-12 text-lg">
-                登入
+              <div className="relative">
+                <Input
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="管理員密碼"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="text-lg h-12 pr-12"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((visible) => !visible)}
+                  aria-label={showPassword ? '隱藏管理員密碼' : '顯示管理員密碼'}
+                  title={showPassword ? '隱藏密碼' : '顯示密碼'}
+                  className="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-slate-500 hover:text-slate-800"
+                >
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
+              </div>
+              <Button type="submit" className="w-full h-12 text-lg" disabled={loginSubmitting}>
+                {loginSubmitting && <Loader2 className="w-5 h-5 mr-2 animate-spin" />}
+                {loginSubmitting ? '正在驗證…' : '登入'}
               </Button>
             </form>
           </CardContent>
@@ -693,7 +731,7 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 md:p-8 flex flex-col">
+    <div className="min-h-screen craft-field p-4 md:p-8 flex flex-col">
       <div className="max-w-7xl mx-auto space-y-6 flex-1">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -743,6 +781,8 @@ export default function AdminPage() {
             </Button>
           </div>
         </div>
+
+        <AttendeeImport eventId={eventId} configId={configId} version="同工" />
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -874,7 +914,7 @@ export default function AdminPage() {
             {loading ? (
               <div className="text-center py-12">
                 <RefreshCw className="w-8 h-8 animate-spin mx-auto text-slate-400" />
-                <p className="mt-2 text-slate-600">載入中...</p>
+                <p className="mt-2 text-slate-600">{enteringAdmin ? '登入成功，正在載入活動資料…' : '載入中...'}</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -960,13 +1000,13 @@ export default function AdminPage() {
                           )}
                         </td>
                         {extraHeaders.map((h) => {
-                          const field = attendee.詳細欄位?.find((f) => f.標題 === h);
+                          const field = attendee.詳細欄位?.find((f) => f.標題.trim() === h);
                           return (
                             <td
                               key={h}
                               className="p-3 text-sm text-slate-700"
                             >
-                              {field?.值 || '-'}
+                              {field?.值 ? (h.includes('電話') ? formatContactPhone(field.值) : field.值) : '-'}
                             </td>
                           );
                         })}

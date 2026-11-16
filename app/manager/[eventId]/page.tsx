@@ -25,6 +25,7 @@ export default function ManagerPage() {
   const params = useParams();
   const eventId = params.eventId as string;
   const searchParams = useSearchParams();
+  const configId = searchParams.get('configId') || undefined;
   const sheetFromQuery = searchParams.get('sheet');
 
   const [keyword, setKeyword] = useState('');
@@ -106,6 +107,7 @@ export default function ManagerPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          configId,
           sheetId: effectiveSheetId,
           identifier,
           eventId,
@@ -168,6 +170,7 @@ export default function ManagerPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          configId,
           sheetId: effectiveSheetId,
           identifier: selected.序號 || selected.姓名,
           source: 'manager',
@@ -209,7 +212,7 @@ export default function ManagerPage() {
       const response = await fetch(
         `/api/search?sheetId=${encodeURIComponent(effectiveSheetId)}&query=${encodeURIComponent(
           keyword.trim()
-        )}&eventId=${encodeURIComponent(eventId)}`
+        )}&eventId=${encodeURIComponent(eventId)}${configId ? '&configId=' + encodeURIComponent(configId) : ''}`
       );
       const data = await response.json();
 
@@ -238,7 +241,7 @@ export default function ManagerPage() {
       const response = await fetch(
         `/api/search?sheetId=${encodeURIComponent(effectiveSheetId)}&query=${encodeURIComponent(
           identifier
-        )}&eventId=${encodeURIComponent(eventId)}`
+        )}&eventId=${encodeURIComponent(eventId)}${configId ? '&configId=' + encodeURIComponent(configId) : ''}`
       );
       const data = await response.json();
       if (data.success && data.data && data.data.length > 0) {
@@ -274,6 +277,7 @@ export default function ManagerPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          configId,
           sheetId: effectiveSheetId,
           identifier: selected.序號 || selected.姓名,
           eventId,
@@ -308,6 +312,7 @@ export default function ManagerPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          configId,
           sheetId: effectiveSheetId,
           identifier: selected.序號 || selected.姓名,
           eventId,
@@ -361,7 +366,7 @@ export default function ManagerPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 md:p-8 flex flex-col">
+    <div className="min-h-screen craft-field p-4 md:p-8 flex flex-col">
       <div className="max-w-2xl mx-auto space-y-6 flex-1">
         <Card className="shadow-md">
           <CardHeader>

@@ -1,18 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminPasswordFromConfigSheet, logManagerAction } from '@/lib/google-sheets';
+import { registryConfigured, resolveYearEvent } from '@/lib/year-registry';
+import { setAdminSession } from '@/lib/admin-session';
 
 export async function POST(req: NextRequest) {
   try {
-    const { password, eventId } = (await req.json()) as {
+    const { password, eventId, configId, sheetId } = (await req.json()) as {
       password?: string;
       eventId?: string;
+      configId?: string;
+      sheetId?: string;
     };
+
+    const annual = registryConfigured();
+    const match = annual && eventId && (configId || sheetId)
+      ? await resolveYearEvent(eventId, configId, sheetId || undefined)
+      : null;
+    if (annual && !match) return NextResponse.json({ success: false, message: '找不到對應活動' }, { status: 404 });
+    const logSheetId = annual ? match?.event.logSheetId || null : undefined;
 
     if (typeof password !== 'string' || !password) {
       // 密碼格式不正確視為系統警告
       if (eventId) {
         try {
           await logManagerAction({
+            logSheetId,
             eventId,
             action: 'system_warning',
             identifier: '/api/admin/login',
@@ -31,20 +43,21 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const sheetPassword = await getAdminPasswordFromConfigSheet();
+    const adminPassword = process.env.ADMIN_PASSWORD || (!annual ? await getAdminPasswordFromConfigSheet() : null);
 
-    if (!sheetPassword) {
+    if (!adminPassword) {
       return NextResponse.json(
-        { success: false, message: '尚未在活動設定試算表中設定後台密碼（資訊!A2）' },
+        { success: false, message: '尚未設定活動後台密碼，請在伺服器 .env 設定 ADMIN_PASSWORD' },
         { status: 500 }
       );
     }
 
-    if (password === sheetPassword) {
+    if (password === adminPassword) {
       // 登入成功也記錄 log（若有 eventId）
       if (eventId) {
         try {
           await logManagerAction({
+            logSheetId,
             eventId,
             action: 'admin_login',
             identifier: '/api/admin/login',
@@ -57,13 +70,16 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      return NextResponse.json({ success: true });
+      const response = NextResponse.json({ success: true });
+      if (process.env.ADMIN_PASSWORD) setAdminSession(response, eventId || '');
+      return response;
     }
 
     // 密碼錯誤也記錄為系統警告
     if (eventId) {
       try {
         await logManagerAction({
+            logSheetId,
           eventId,
           action: 'system_warning',
           identifier: '/api/admin/login',

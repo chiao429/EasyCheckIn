@@ -40,6 +40,7 @@ export default function KidsManagerPage() {
   const params = useParams();
   const eventId = params.eventId as string;
   const searchParams = useSearchParams();
+  const configId = searchParams.get('configId') || undefined;
   const sheetFromQuery = searchParams.get('sheet');
 
   const [now, setNow] = useState<Date>(() => new Date());
@@ -163,7 +164,7 @@ export default function KidsManagerPage() {
     setSquadLookupLoading(true);
     setSquadLookupError(null);
     try {
-      const response = await fetch(`/api/kids/schedule?sheetId=${encodeURIComponent(effectiveSheetId)}`);
+      const response = await fetch(`/api/kids/schedule?sheetId=${encodeURIComponent(effectiveSheetId)}&eventId=${encodeURIComponent(eventId)}${configId ? '&configId=' + encodeURIComponent(configId) : ''}`);
       const result = await response.json();
       if (!result.success) {
         throw new Error(result.message || `讀取小隊地點資料失敗（HTTP ${response.status}）`);
@@ -253,7 +254,7 @@ export default function KidsManagerPage() {
     const res = await fetch('/api/kids/family', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sheetId: effectiveSheetId, rowIndex }),
+      body: JSON.stringify({ configId, sheetId: effectiveSheetId, eventId, rowIndex }),
     });
     const data = await res.json();
     if (!data.success || data.data.others.length === 0) return [];
@@ -310,7 +311,7 @@ export default function KidsManagerPage() {
       const res = await fetch('/api/kids/checkin/batch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sheetId: effectiveSheetId, targets, absentTargets, eventId, operator: staffName }),
+        body: JSON.stringify({ configId, sheetId: effectiveSheetId, targets, absentTargets, eventId, operator: staffName }),
       });
       const data = await res.json();
       const skippedText = (data.skipped || []).map((x: { 姓名: string; reason: string }) => `${x.姓名}：${x.reason}`).join('；');
@@ -348,6 +349,7 @@ export default function KidsManagerPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          configId,
           sheetId: effectiveSheetId,
           identifier: selected.序號 || selected.姓名,
           eventId,
@@ -393,6 +395,7 @@ export default function KidsManagerPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          configId,
           sheetId: effectiveSheetId,
           identifier: selected.序號 || selected.姓名,
           eventId,
@@ -427,6 +430,7 @@ export default function KidsManagerPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          configId,
           sheetId: effectiveSheetId,
           identifier: selected.序號 || selected.姓名,
           eventId,
@@ -469,7 +473,7 @@ export default function KidsManagerPage() {
       const response = await fetch(
         `/api/kids/search?sheetId=${encodeURIComponent(effectiveSheetId)}&query=${encodeURIComponent(
           keyword.trim()
-        )}&eventId=${encodeURIComponent(eventId)}`
+        )}&eventId=${encodeURIComponent(eventId)}${configId ? '&configId=' + encodeURIComponent(configId) : ''}`
       );
       const data = await response.json();
 
@@ -498,7 +502,7 @@ export default function KidsManagerPage() {
       const response = await fetch(
         `/api/kids/search?sheetId=${encodeURIComponent(effectiveSheetId)}&query=${encodeURIComponent(
           identifier
-        )}&eventId=${encodeURIComponent(eventId)}`
+        )}&eventId=${encodeURIComponent(eventId)}${configId ? '&configId=' + encodeURIComponent(configId) : ''}`
       );
       const data = await response.json();
       if (data.success && data.data && data.data.length > 0) {
@@ -534,7 +538,7 @@ export default function KidsManagerPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-3 sm:p-4 md:p-8 flex flex-col">
+    <div className="min-h-screen craft-field p-3 sm:p-4 md:p-8 flex flex-col">
       <div className="w-full max-w-2xl mx-auto space-y-6 flex-1 min-w-0">
         <Card className="shadow-md">
           <CardHeader className="px-4 sm:px-6">

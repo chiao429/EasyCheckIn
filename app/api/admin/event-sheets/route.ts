@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getGoogleSheetsClient, extractSheetIdFromUrl } from '@/lib/google-sheets';
+import { registryConfigured, resolveYearEvent } from '@/lib/year-registry';
 
 export async function GET(request: NextRequest) {
   try {
@@ -11,6 +12,19 @@ export async function GET(request: NextRequest) {
         { success: false, message: '缺少 eventId 參數' },
         { status: 400 }
       );
+    }
+
+    if (registryConfigured()) {
+      const match = await resolveYearEvent(eventId, searchParams.get('configId') || undefined, searchParams.get('sheetId') || undefined);
+      if (!match || (!searchParams.get('configId') && !searchParams.get('sheetId'))) {
+        return NextResponse.json({ success: false, message: '找不到對應活動的設定資料' }, { status: 404 });
+      }
+      const { sheetId: activitySheetId, logSheetId } = match.event;
+      const url = (id: string) => id ? `https://docs.google.com/spreadsheets/d/${id}/edit` : null;
+      return NextResponse.json({ success: true, data: {
+        eventId, activitySheetId, logSheetId,
+        activitySheetUrl: url(activitySheetId), logSheetUrl: url(logSheetId),
+      } });
     }
 
     const configSheetId = process.env.GOOGLE_EVENT_CONFIG_SHEET_ID;

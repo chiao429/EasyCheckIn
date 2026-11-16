@@ -43,6 +43,7 @@ export default function KidsSquadPage() {
   const params = useParams();
   const eventId = params.eventId as string;
   const searchParams = useSearchParams();
+  const configId = searchParams.get('configId') || undefined;
   const sheetId = searchParams.get('sheet') || eventId;
   const settingsKey = `easycheck_kids_squad:${eventId}`;
 
@@ -83,7 +84,7 @@ export default function KidsSquadPage() {
   const fetchRoster = useCallback(
     async (targetSquad: string) => {
       const response = await fetch(
-        `/api/kids/squad/roster?sheetId=${encodeURIComponent(sheetId)}&squad=${encodeURIComponent(targetSquad)}`,
+        `/api/kids/squad/roster?sheetId=${encodeURIComponent(sheetId)}&squad=${encodeURIComponent(targetSquad)}&eventId=${encodeURIComponent(eventId)}${configId ? '&configId=' + encodeURIComponent(configId) : ''}`,
         { cache: 'no-store' }
       );
       return response.json();
@@ -155,7 +156,7 @@ export default function KidsSquadPage() {
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sheetId, eventId, operator, ...body }),
+      body: JSON.stringify({ configId, sheetId, eventId, operator, ...body }),
     });
     return response.json();
   };
@@ -257,7 +258,7 @@ export default function KidsSquadPage() {
   };
 
   const shell = (children: React.ReactNode) => (
-    <div className="flex min-h-screen flex-col bg-gradient-to-br from-slate-50 to-slate-100 p-3 sm:p-4 md:p-8">
+    <div className="flex min-h-screen flex-col craft-field p-3 sm:p-4 md:p-8">
       <div className="mx-auto w-full min-w-0 max-w-2xl flex-1 space-y-4">{children}</div>
       <SiteFooter />
       {popup && <CheckInResultDialog people={popup} onClose={closePopup} />}

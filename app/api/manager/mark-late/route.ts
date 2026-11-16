@@ -1,16 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getGoogleSheetsClient, logManagerAction } from '@/lib/google-sheets';
+import { resolveRequestedActivity } from '@/lib/year-registry';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { sheetId, identifier, eventId, operator, attendeeName } = body as {
+    const { sheetId: requestedSheetId, identifier, eventId, operator, attendeeName, configId } = body as {
       sheetId?: string;
       identifier?: string;
       eventId?: string;
       operator?: string;
       attendeeName?: string;
+      configId?: string;
     };
+    const { sheetId, logSheetId } = await resolveRequestedActivity(eventId || null, requestedSheetId || null, configId);
 
     if (!sheetId || !identifier || !eventId) {
       return NextResponse.json(
@@ -41,6 +44,7 @@ export async function POST(request: NextRequest) {
 
     if (rowIndex === -1) {
       await logManagerAction({
+        logSheetId,
         eventId,
         action: 'mark_late_failed',
         identifier,
@@ -60,6 +64,7 @@ export async function POST(request: NextRequest) {
 
     if (currentStatus === 'TRUE') {
       await logManagerAction({
+        logSheetId,
         eventId,
         action: 'mark_late_failed',
         identifier,
@@ -88,6 +93,7 @@ export async function POST(request: NextRequest) {
     });
 
     await logManagerAction({
+      logSheetId,
       eventId,
       action: 'mark_late',
       identifier,

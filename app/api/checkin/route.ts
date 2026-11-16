@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { checkIn, logManagerAction } from '@/lib/google-sheets';
+import { resolveRequestedActivity } from '@/lib/year-registry';
 
 // 簡單的併發/速率限制：每個執行個體每秒最多允許 45 次簽到請求
 // 注意：這是記憶體內的計數，對單一 serverless function 實例有效。
@@ -39,14 +40,17 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { identifier, sheetId, source, eventId, operator, attendeeName } = body as {
+    const { identifier, sheetId: requestedSheetId, source, eventId, operator, attendeeName, configId } = body as {
       identifier?: string;
       sheetId?: string;
       source?: 'self' | 'manager';
       eventId?: string;
       operator?: string;
       attendeeName?: string;
+      configId?: string;
     };
+    const { checkinClosed, sheetId, logSheetId } = await resolveRequestedActivity(eventId || null, requestedSheetId || null, configId, true);
+    if (checkinClosed) return NextResponse.json({ success: false, message: '此活動目前未開放報到' }, { status: 409 });
 
     if (!identifier || !sheetId) {
       return NextResponse.json(
@@ -61,6 +65,7 @@ export async function POST(request: NextRequest) {
     if (source === 'manager' && eventId) {
       try {
         await logManagerAction({
+          logSheetId,
           eventId,
           action: result.success ? 'manager_checkin' : 'manager_checkin_failed',
           identifier,

@@ -1,17 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { checkInKidsRows, logManagerAction } from '@/lib/google-sheets';
+import { resolveRequestedActivity } from '@/lib/year-registry';
 
 // 兒童版：同一家庭一次報到（最多 10 人），每位各寫一筆日誌
 export async function POST(request: NextRequest) {
   try {
-    const { sheetId, targets, absentTargets, eventId, operator } = (await request.json()) as {
+    const body = (await request.json()) as {
       sheetId?: string;
       targets?: { rowIndex: number; 姓名: string }[];
       /** 同戶未勾選者，標記為不會出席 */
       absentTargets?: { rowIndex: number; 姓名: string }[];
       eventId?: string;
       operator?: string;
+      configId?: string;
     };
+    const { targets, absentTargets, eventId, operator, configId } = body;
+    const { checkinClosed, sheetId, logSheetId } = await resolveRequestedActivity(eventId || null, body.sheetId || null, configId, true);
+    if (checkinClosed) return NextResponse.json({ success: false, message: '此活動目前未開放報到' }, { status: 409 });
     if (!sheetId || !Array.isArray(targets) || targets.length === 0) {
       return NextResponse.json({ success: false, message: '請至少選擇一位' }, { status: 400 });
     }
@@ -30,6 +35,7 @@ export async function POST(request: NextRequest) {
       for (const c of checkedIn) {
         try {
           await logManagerAction({
+            logSheetId,
             eventId,
             action: 'manager_checkin',
             identifier: c.序號 || c.姓名,
@@ -45,6 +51,7 @@ export async function POST(request: NextRequest) {
       for (const a of markedAbsent) {
         try {
           await logManagerAction({
+            logSheetId,
             eventId,
             action: 'mark_cancelled',
             identifier: a.序號 || a.姓名,
