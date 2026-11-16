@@ -203,7 +203,7 @@ export function activityBindings(rows: unknown[][]) {
   ]).sort((a, b) => a[0].localeCompare(b[0])));
 }
 
-export async function validateYearConfig(config: YearConfig, configs: YearConfig[]) {
+export async function validateYearConfig(config: YearConfig, configs: YearConfig[], candidateRows?: unknown[][]) {
   const sheets = getSheets();
   const { configSheetId, folderUrl } = config;
   const drive = getGoogleDriveMetadataClient();
@@ -228,8 +228,7 @@ export async function validateYearConfig(config: YearConfig, configs: YearConfig
   const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: configSheetId, fields: 'sheets.properties' });
   const tabs = new Set((spreadsheet.data.sheets || []).map((sheet) => sheet.properties?.title));
   if (!tabs.has('工作表1')) return { ok: false, errors: ['缺少「工作表1」分頁'], activityCount: 0, bindings: '' };
-  const result = await sheets.spreadsheets.values.get({ spreadsheetId: configSheetId, range: '工作表1!A1:F' });
-  const rows = result.data.values || [];
+  const rows = candidateRows ?? (await sheets.spreadsheets.values.get({ spreadsheetId: configSheetId, range: '工作表1!A1:F' })).data.values ?? [];
   const headers = rows[0] || [];
   const errors: string[] = [];
   if (!tabs.has('資訊')) errors.push('缺少「資訊」分頁');

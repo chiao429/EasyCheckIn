@@ -134,7 +134,7 @@ export default function YearsPage() {
         <label className="text-sm">年度<input value={year} onChange={(e) => setYear(e.target.value)} className="mt-1 w-full rounded-md border px-3 py-2" required /></label><label className="text-sm">顯示名稱<input value={name} onChange={(e) => setName(e.target.value)} className="mt-1 w-full rounded-md border px-3 py-2" required /></label>
         <label className="text-sm md:col-span-2">年度 Drive 資料夾連結<input value={folderUrl} onChange={(e) => setFolderUrl(e.target.value)} className="mt-1 w-full rounded-md border px-3 py-2" required /></label>
         <button disabled={busy || !driveConnected} className="w-fit rounded-md bg-blue-700 px-4 py-2 font-semibold text-white disabled:opacity-50">新增草稿</button></form>{!driveConnected && <p className="mt-3 text-sm text-slate-500">先連結有權限在目標年度資料夾新增檔案的 Google 帳號。</p>}</section>
-      <section id="new-activity" className="mb-8 rounded-xl border bg-white p-6 shadow-sm"><h2 className="text-xl font-semibold">新增活動</h2><p className="mt-1 text-sm text-slate-600">先選已登記年度，每次建立一個活動、出席名單和操作紀錄。選目前啟用年度時會切換到新版設定；選其他年度則只建立已驗證版本，不影響首頁年度。</p><p className="mt-3 text-sm text-slate-700">目前首頁年度：{activeConfig ? `${activeConfig.year} · ${activeConfig.name}` : '尚無已啟用年度'}</p><form onSubmit={(event) => { event.preventDefault(); void submit('create-event', { year: eventYear, eventName, version: eventVersion, eventType, note: eventNote }); }} className="mt-4 grid gap-4 md:grid-cols-2">
+      <section id="new-activity" className="mb-8 rounded-xl border bg-white p-6 shadow-sm"><h2 className="text-xl font-semibold">新增活動</h2><p className="mt-1 text-sm text-slate-600">選擇已登記年度後，活動會加入該年度的活動設定表，並建立出席名單和操作紀錄。</p><p className="mt-3 text-sm text-slate-700">目前首頁年度：{activeConfig ? `${activeConfig.year} · ${activeConfig.name}` : '尚無已啟用年度'}</p><form onSubmit={(event) => { event.preventDefault(); void submit('create-event', { year: eventYear, eventName, version: eventVersion, eventType, note: eventNote }); }} className="mt-4 grid gap-4 md:grid-cols-2">
         <label className="text-sm">已登記年度<select value={eventYear} onChange={(e) => setEventYear(e.target.value)} className="mt-1 w-full rounded-md border px-3 py-2" required disabled={!yearOptions.length}><option value="" disabled>請選擇年度</option>{yearOptions.map((year) => <option key={year} value={year}>{year}</option>)}</select></label>
         <label className="text-sm">活動名稱<input value={eventName} onChange={(e) => setEventName(e.target.value)} maxLength={100} className="mt-1 w-full rounded-md border px-3 py-2" required /></label>
         <label className="text-sm">類型<select value={eventType} onChange={(e) => { const type = e.target.value; setEventType(type); if (type !== '其他') setEventVersion(type === '兒童聖誕午會' ? '兒童' : '同工'); }} className="mt-1 w-full rounded-md border px-3 py-2">{eventTypes.map((type) => <option key={type}>{type}</option>)}</select></label>
@@ -154,7 +154,7 @@ export default function YearsPage() {
         <h2 id="activity-created-title" className="text-xl font-semibold">活動建立成功</h2>
         <p className="mt-2 break-words">已在 {createdEvent.year} 年度建立「{createdEvent.name}」。</p>
         <p className="mt-2 text-sm text-slate-600">
-          {createdEvent.activated ? '首頁已切換至新版設定。' : '已建立年度設定，啟用後會顯示在首頁。'}
+          {createdEvent.activated ? '活動已加入首頁使用的年度設定。' : '活動已加入所選年度。'}
         </p>
         <div className="mt-4 flex flex-wrap gap-4 text-sm text-blue-700">
           <a className="underline" href={createdEvent.activitySheetUrl} target="_blank" rel="noopener noreferrer">開啟出席名單</a>

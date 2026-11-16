@@ -4,7 +4,7 @@ import { randomUUID } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { getGoogleSheetsClient } from '@/lib/google-sheets';
 import { isDriveConnected } from '@/lib/year-drive-oauth';
-import { activityBindings, copyActivityConfigSheet, createEventSheets, createYearActivitySheet, deleteDriveFiles, driveFolderId, hasYearAdminSession, makeYearAdminToken, readYearConfigs, registerLegacyConfigForQrCompatibility, registryConfigured, resolveYearEvent, validateYearConfig, YEAR_ADMIN_COOKIE } from '@/lib/year-registry';
+import { activityBindings, createEventSheets, createYearActivitySheet, deleteDriveFiles, driveFolderId, hasYearAdminSession, makeYearAdminToken, readYearConfigs, registerLegacyConfigForQrCompatibility, registryConfigured, resolveYearEvent, validateYearConfig, YEAR_ADMIN_COOKIE } from '@/lib/year-registry';
 
 export const runtime = 'nodejs';
 
@@ -148,91 +148,60 @@ export async function POST(request: NextRequest) {
       }
       const folderId = driveFolderId(base.folderUrl);
       if (!folderId) return NextResponse.json({ success: false, message: '所選年度缺少有效 Drive 資料夾連結' }, { status: 409 });
-      const shouldActivate = base.configId === activeConfigId;
-
-      const configId = randomUUID();
+      const spreadsheetId = base.configSheetId;
+      const range = '工作表1!A1:G';
+      const readRows = async () => (await sheets.spreadsheets.values.get({ spreadsheetId, range })).data.values || [];
       const eventId = `evt_${randomUUID()}`;
       const createdIds: string[] = [];
-      let registryRowNumber: number | undefined;
-      let registryAppendAttempted = false;
-      let activationAttempted = false;
-      let activitySheetUrl = '';
-      let logSheetUrl = '';
+      let appendAttempted = false;
       try {
-        const sourceRowsResult = await sheets.spreadsheets.values.get({ spreadsheetId: base.configSheetId, range: '工作表1!A2:F' });
-        const sourceRows = sourceRowsResult.data.values || [];
-        if (base.publishedBindings && activityBindings(sourceRows) !== base.publishedBindings) {
+        const rows = await readRows();
+        const originalBindings = activityBindings(rows.slice(1));
+        if (base.publishedBindings && base.publishedBindings !== originalBindings) {
           return NextResponse.json({ success: false, message: '目前活動設定已與已驗證版本不符，請先重新檢查年度設定' }, { status: 409 });
         }
         const assets = await createEventSheets(folderId, eventName, version as '同工' | '兒童', eventType);
         createdIds.push(...assets.createdIds);
-        await saveActivityState(id, eventId, assets.activitySheetId, 'draft');
-        activitySheetUrl = `https://docs.google.com/spreadsheets/d/${assets.activitySheetId}/edit`;
-        logSheetUrl = `https://docs.google.com/spreadsheets/d/${assets.logSheetId}/edit`;
-        const configSheetId = await copyActivityConfigSheet(
-          base.configSheetId, folderId, `${base.year}_${eventName}_活動設定`,
-        );
-        createdIds.push(configSheetId);
-        await sheets.spreadsheets.values.update({
-          spreadsheetId: configSheetId, range: '工作表1!G1', valueInputOption: 'RAW',
-          requestBody: { values: [['類型']] },
-        });
-        await sheets.spreadsheets.values.append({
-          spreadsheetId: configSheetId, range: '工作表1!A:G', valueInputOption: 'RAW', insertDataOption: 'INSERT_ROWS',
-          requestBody: { values: [[eventName, `https://docs.google.com/spreadsheets/d/${assets.activitySheetId}/edit`, eventId, note, `https://docs.google.com/spreadsheets/d/${assets.logSheetId}/edit`, version, eventType]] },
-        });
-
-        const validationConfig = {
-          ...base, configId, configSheetId, status: 'draft', publishedBindings: '', rowNumber: 0,
-        };
-        const { bindings, ...validation } = await validateYearConfig(validationConfig, configs);
+        const activitySheetUrl = `https://docs.google.com/spreadsheets/d/${assets.activitySheetId}/edit`;
+        const logSheetUrl = `https://docs.google.com/spreadsheets/d/${assets.logSheetId}/edit`;
+        const newRow = [eventName, activitySheetUrl, eventId, note, logSheetUrl, version, eventType];
+        const validation = await validateYearConfig({ ...base, publishedBindings: '' }, configs, [...rows, newRow]);
         if (!validation.ok) throw new Error(`新活動資料驗證失敗：${validation.errors.join('；')}`);
 
-        const latest = await readYearConfigs();
-        if (shouldActivate && latest.activeConfigId !== activeConfigId) throw new Error('建立期間啟用年度已變更，請重新整理後再試');
-        const createdAt = new Date().toISOString();
-        registryAppendAttempted = true;
-        const appended = await sheets.spreadsheets.values.append({
-          spreadsheetId: id, range: '年度設定!A4:J', valueInputOption: 'RAW', insertDataOption: 'INSERT_ROWS',
-          requestBody: { values: [[configId, base.year, base.name, configSheetId, base.folderUrl, 'validated', 'TRUE', createdAt, createdAt, bindings]] },
-        });
-        const rowMatch = appended.data.updates?.updatedRange?.match(/!A(\d+)/);
-        registryRowNumber = rowMatch ? Number(rowMatch[1]) : (await readYearConfigs()).configs.find((config) => config.configId === configId)?.rowNumber;
-        if (!registryRowNumber) throw new Error('年度登記表未回傳新設定列號');
-
-        if (shouldActivate) {
-          const beforeSwitch = await readYearConfigs();
-          if (beforeSwitch.activeConfigId !== activeConfigId) throw new Error('啟用年度已被其他操作更新，本次新增未切換');
-          activationAttempted = true;
-          try {
-            await sheets.spreadsheets.values.update({ spreadsheetId: id, range: '年度設定!B2', valueInputOption: 'RAW', requestBody: { values: [[configId]] } });
-          } catch {
-            // Confirm the pointer after a timeout; Google may have committed the write.
-          }
-          const afterSwitch = await readYearConfigs();
-          if (afterSwitch.activeConfigId !== configId) throw new Error('無法確認新活動設定已啟用');
+        await saveActivityState(id, eventId, assets.activitySheetId, 'draft');
+        const latest = (await readYearConfigs()).configs.find((config) => config.configId === base.configId);
+        if (!latest || latest.status === 'archived' || latest.publishedBindings !== base.publishedBindings ||
+            activityBindings((await readRows()).slice(1)) !== originalBindings) {
+          throw new Error('年度設定已變更，請重新整理後再試');
+        }
+        appendAttempted = true;
+        await sheets.spreadsheets.values.append({
+          spreadsheetId, range, valueInputOption: 'RAW', insertDataOption: 'INSERT_ROWS',
+          requestBody: { values: [newRow] },
+        }).catch(() => undefined);
+        if (activityBindings((await readRows()).slice(1)) !== validation.bindings) {
+          throw new Error('無法確認新活動已寫入，請先檢查活動設定表');
+        }
+        const publishedRange = `年度設定!I${latest.rowNumber}:J${latest.rowNumber}`;
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: id, range: publishedRange, valueInputOption: 'RAW',
+          requestBody: { values: [[new Date().toISOString(), validation.bindings]] },
+        }).catch(() => undefined);
+        const saved = (await readYearConfigs()).configs.find((config) => config.configId === base.configId);
+        if (saved?.publishedBindings !== validation.bindings ||
+            activityBindings((await readRows()).slice(1)) !== validation.bindings) {
+          throw new Error('無法確認活動已發布，請先檢查年度設定再重試');
         }
         return NextResponse.json({
-          success: true, eventId, configId, year, activated: shouldActivate,
+          success: true, eventId, configId: base.configId, year, activated: base.configId === activeConfigId,
           activitySheetUrl, logSheetUrl,
         });
       } catch (error) {
-        const latest = await readYearConfigs().catch(() => null);
-        const persisted = latest?.configs.find((config) => config.configId === configId);
-        if (persisted && !registryRowNumber) registryRowNumber = persisted.rowNumber;
-        if (latest?.activeConfigId === configId) {
-          return NextResponse.json({ success: true, eventId, configId, year, activated: true, activitySheetUrl, logSheetUrl });
-        }
-        if (!latest && (registryAppendAttempted || activationAttempted)) {
-          return NextResponse.json({ success: false, message: '無法確認年度切換結果；請重新整理年度列表確認後再操作，暫不清理新建檔案' }, { status: 503 });
-        }
-        if (registryRowNumber) {
-          await sheets.spreadsheets.values.clear({ spreadsheetId: id, range: `年度設定!A${registryRowNumber}:J${registryRowNumber}` }).catch(() => undefined);
-        }
-        await deleteDriveFiles(createdIds).catch(() => undefined);
+        if (!appendAttempted) await deleteDriveFiles(createdIds).catch(() => undefined);
         throw error;
       }
     }
+
     if (body.action === 'create') {
       const year = String(body.year || '').trim();
       const name = String(body.name || '').trim();
