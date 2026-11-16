@@ -68,7 +68,7 @@ export default async function ActivitiesPage({ searchParams }: {
               <Link className="craft-ghost" href={`${listUrl}&eventId=${encodeURIComponent(selected.eventId)}&tab=qr`}>報到 QR Code</Link>
             </div>
           </div>
-          {isAdmin && config && config.status !== 'archived' && stateOf(selected) !== 'archived' && <ActivityActions eventId={selected.eventId} configId={config.configId} open={stateOf(selected) === 'open'} draft={stateOf(selected) === 'draft'} />}
+          {isAdmin && config && config.status !== 'archived' && <ActivityActions eventId={selected.eventId} configId={config.configId} open={stateOf(selected) === 'open'} deleteOnly={stateOf(selected) === 'archived'} />}
           {isAdmin && config && <EditActivity eventId={selected.eventId} configId={config.configId} name={selected.name} note={selected.note} />}
           {qr && <div className="craft-panel mt-4">
             <h2>參加者報到 QR Code</h2>
@@ -104,7 +104,7 @@ export default async function ActivitiesPage({ searchParams }: {
             <button className="craft-ghost">查看活動</button>
           </form>
           <div className="craft-list">
-            {visibleEvents.map((event) => <ActivityCard key={event.eventId} event={event} status={activityStateLabel[stateOf(event)]} onlyActivity={Boolean(searchParams.onlyEventId)} />)}
+            {visibleEvents.map((event) => <ActivityCard key={event.eventId} event={event} status={activityStateLabel[stateOf(event)]} onlyActivity={Boolean(searchParams.onlyEventId)} actions={config && config.status !== 'archived' && <ActivityActions eventId={event.eventId} configId={config.configId} open={stateOf(event) === 'open'} deleteOnly />} />)}
             {!visibleEvents.length && <p className="craft-muted">{config ? '此年度設定尚無活動。' : '請選擇已驗證的年度設定。'}</p>}
           </div>
         </> : <PublicActivityList />}

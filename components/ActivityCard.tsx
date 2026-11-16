@@ -1,10 +1,11 @@
+import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { CopyActivityEntry } from '@/components/ActivityActions';
 import { activityLinks, type ActivityLinkData } from '@/lib/activity-links';
 
 type ActivityCardData = ActivityLinkData & { name: string };
 
-export function ActivityCard({ event, status, onlyActivity = false }: { event: ActivityCardData; status?: string; onlyActivity?: boolean }) {
+export function ActivityCard({ event, status, onlyActivity = false, actions }: { event: ActivityCardData; status?: string; onlyActivity?: boolean; actions?: ReactNode }) {
   const links = activityLinks(event);
   const isKids = event.version?.includes('兒童') || false;
   const type = isKids ? '兒童版' : '同工版';
@@ -45,6 +46,7 @@ export function ActivityCard({ event, status, onlyActivity = false }: { event: A
             </div>
           ))}
         </div>
+        {actions}
       </details>
     </article>
   );

@@ -4,14 +4,14 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 
-export function ActivityActions({ eventId, configId, open, draft }: { eventId: string; configId: string; open: boolean; draft: boolean }) {
+export function ActivityActions({ eventId, configId, open, deleteOnly = false }: { eventId: string; configId: string; open: boolean; deleteOnly?: boolean }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
 
   async function change(state: 'open' | 'closed' | 'archived' | 'deleted') {
     if (state === 'archived' && !window.confirm('封存後會停止報到，並保留出席紀錄。確定封存？')) return;
-    if (state === 'deleted' && !window.confirm('確定從活動列表移除此草稿？')) return;
+    if (state === 'deleted' && !window.confirm('確定刪除這個活動？活動將從列表移除並停止報到，出席名單和操作紀錄會保留。')) return;
     setBusy(true);
     setMessage('');
     try {
@@ -31,11 +31,11 @@ export function ActivityActions({ eventId, configId, open, draft }: { eventId: s
   }
 
   return <div className="craft-actions mt-4">
-    <button className="craft-ghost" disabled={busy} onClick={() => void change(open ? 'closed' : 'open')}>
+    {!deleteOnly && <><button className="craft-ghost" disabled={busy} onClick={() => void change(open ? 'closed' : 'open')}>
       {open ? '關閉報到' : '開放報到'}
     </button>
-    <button className="craft-ghost" disabled={busy} onClick={() => void change('archived')}>封存活動</button>
-    {draft && <button className="craft-ghost" disabled={busy} onClick={() => void change('deleted')}>刪除草稿</button>}
+    <button className="craft-ghost" disabled={busy} onClick={() => void change('archived')}>封存活動</button></>}
+    <button className="craft-ghost text-red-700" disabled={busy} onClick={() => void change('deleted')}>刪除活動</button>
     {message && <p role="alert">{message}</p>}
   </div>;
 }

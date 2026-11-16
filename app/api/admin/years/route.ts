@@ -95,7 +95,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: false, message: '請先在年度設定開啟簽到' }, { status: 409 });
       }
       const current = (await readActivityStates(id)).get(`${eventId}:${activity.event.sheetId}`) || 'open';
-      if (current === 'deleted' || current === 'archived' || (state === 'deleted' && current !== 'draft')) {
+      if (state === 'deleted' && current === 'deleted') return NextResponse.json({ success: true });
+      if (current === 'deleted' || (current === 'archived' && state !== 'deleted')) {
         return NextResponse.json({ success: false, message: '目前狀態不允許這項操作' }, { status: 409 });
       }
       if (state === 'open') {

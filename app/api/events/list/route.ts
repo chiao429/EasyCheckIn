@@ -78,7 +78,8 @@ export async function GET(req: NextRequest) {
           eventType,
           ...(configId ? { configId } : {}),
         };
-      });
+      })
+      .filter(({ eventId, sheetId }) => states?.get(`${eventId}:${sheetId}`) !== 'deleted');
 
     return NextResponse.json({ success: true, data: events, currentYear, configSheetId });
   } catch (error) {
