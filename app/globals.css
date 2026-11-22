@@ -419,3 +419,15 @@ dialog::backdrop { background: rgba(12, 23, 84, .28); animation: backdrop-enter 
 }
 @keyframes copy-toast-enter { from { opacity: 0; transform: translate(8px, -4px); } to { opacity: 1; transform: translate(0, 0); } }
 @media (max-width: 600px) { .copy-toast { top: 12px; right: 12px; } }
+.dashboard-dark .dashboard-list-trigger {
+  border: 2px solid rgba(255, 255, 255, .36);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .22);
+}
+.dashboard-dark .dashboard-list-trigger[data-list-mode="all"] { background-color: #43584d !important; }
+.dashboard-dark .dashboard-list-trigger[data-list-mode="checked"] { background-color: #187a4a !important; }
+.dashboard-dark .dashboard-list-trigger[data-list-mode="unchecked"] { background-color: #a62d3a !important; }
+.dashboard-dark .dashboard-list-trigger[data-list-mode="cancelled"] { background-color: #98600d !important; }
+.dashboard-dark .dashboard-list-trigger:hover {
+  border-color: rgba(255, 255, 255, .82);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, .3);
+}

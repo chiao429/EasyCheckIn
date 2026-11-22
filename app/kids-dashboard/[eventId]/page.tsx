@@ -38,6 +38,7 @@ export default function KidsDashboardPage() {
   // contacted / toContact：聯繫狀態卡點選後，只列未報到中的已聯繫 / 待聯繫
   const [listMode, setListMode] = useState<ListMode>('checked');
   const [showDetails, setShowDetails] = useState(false);
+  const [showUsageGuide, setShowUsageGuide] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showContactedInUnchecked, setShowContactedInUnchecked] = useState(true);
@@ -101,6 +102,8 @@ export default function KidsDashboardPage() {
       } else if (storedDetails === 'false') {
         setShowDetails(false);
       }
+
+      setShowUsageGuide(window.localStorage.getItem(`kids_dashboard_usage_guide_${eventId}`) !== 'seen');
 
       const pageSizeKey = `kids_dashboard_page_size_${eventId}`;
       const storedPageSize = window.localStorage.getItem(pageSizeKey);
@@ -256,8 +259,28 @@ export default function KidsDashboardPage() {
   const pagedList = detailList.slice(startIndex, startIndex + effectivePageSize);
 
   const handleChangeListMode = (mode: ListMode) => {
+    dismissUsageGuide();
     setListMode(mode);
     setCurrentPage(1);
+  };
+
+  const dismissUsageGuide = () => {
+    setShowUsageGuide(false);
+    try {
+      window.localStorage.setItem(`kids_dashboard_usage_guide_${eventId}`, 'seen');
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleStatCardClick = (mode: ListMode) => {
+    if (showDetails && listMode === mode) {
+      dismissUsageGuide();
+      setShowDetails(false);
+      return;
+    }
+    handleChangeListMode(mode);
+    setShowDetails(true);
   };
 
   if (!hydrated) {
@@ -305,25 +328,6 @@ export default function KidsDashboardPage() {
                 <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
                 重新整理
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowDetails((prev) => !prev)}
-                className={`border-stone-300 text-xs font-medium rounded-full px-3 py-1.5 transition-all
-                  ${showDetails
-                    ? 'bg-emerald-500 text-slate-900 hover:bg-emerald-400 shadow-md'
-                    : 'bg-stone-50 text-stone-800 hover:bg-stone-100'}`}
-              >
-                <span className="mr-2">名單區塊</span>
-                <span
-                  className={`inline-flex items-center w-10 h-5 rounded-full px-0.5 text-[10px] font-semibold transition-all
-                    ${showDetails
-                      ? 'bg-emerald-100 text-emerald-900 justify-end'
-                      : 'bg-stone-200 text-stone-950 justify-start'}`}
-                >
-                  <span className="w-4 h-4 rounded-full bg-white shadow" />
-                </span>
-              </Button>
             </div>
             <p className="text-[11px] text-stone-600">
               最後更新時間：{lastUpdated || '尚未載入'}
@@ -338,17 +342,19 @@ export default function KidsDashboardPage() {
         )}
 
         {/* KPI Cards */}
+        {showUsageGuide && <div className="flex items-center justify-between gap-3 rounded-lg border border-emerald-700 bg-emerald-950/60 px-4 py-3 text-sm text-emerald-100">
+          <p>點擊統計卡查看對應名單，再點同一張卡片收合。</p>
+          <Button type="button" variant="ghost" size="sm" className="shrink-0 text-emerald-100 hover:bg-emerald-900" onClick={dismissUsageGuide}>知道了</Button>
+        </div>}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <Card
-            className={`bg-stone-100 border-stone-300 transition-all cursor-pointer hover:shadow-md ${
+            data-list-mode="all"
+            className={`dashboard-list-trigger bg-stone-100 border-stone-300 transition-all cursor-pointer hover:shadow-md ${
               showDetails && listMode === 'all'
                 ? 'ring-4 ring-slate-200 ring-offset-2 ring-offset-slate-900 shadow-xl scale-[1.05] -translate-y-1'
                 : 'shadow-sm'
             }`}
-            onClick={() => {
-              if (!showDetails) return;
-              handleChangeListMode('all');
-            }}
+            onClick={() => handleStatCardClick('all')}
           >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <div className="flex flex-col gap-1">
@@ -363,20 +369,18 @@ export default function KidsDashboardPage() {
               <div className="text-5xl md:text-6xl font-extrabold text-stone-950 text-right leading-tight">
                 {effectiveTotalForRate}
               </div>
-              <p className="text-xs text-stone-700 mt-1">不含已標記不會出席</p>
+              <p className="text-xs text-stone-700 mt-1">點擊查看兒童名單（不含不會出席）</p>
             </CardContent>
           </Card>
 
           <Card
-            className={`bg-emerald-600 cursor-pointer transition-all hover:shadow-md ${
+            data-list-mode="checked"
+            className={`dashboard-list-trigger bg-emerald-600 cursor-pointer transition-all hover:shadow-md ${
               showDetails && listMode === 'checked'
                 ? 'ring-4 ring-emerald-300 ring-offset-2 ring-offset-slate-900 shadow-xl scale-[1.05] -translate-y-1'
                 : 'shadow-sm'
             }`}
-            onClick={() => {
-              if (!showDetails) return;
-              handleChangeListMode('checked');
-            }}
+            onClick={() => handleStatCardClick('checked')}
           >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-base md:text-lg font-medium text-white">已報到</CardTitle>
@@ -386,20 +390,18 @@ export default function KidsDashboardPage() {
               <div className="text-5xl md:text-6xl font-extrabold text-emerald-100 text-right leading-tight">
                 {checked}
               </div>
-              <p className="text-xs text-emerald-200 mt-1">已到兒童人數</p>
+              <p className="text-xs text-emerald-100 mt-1">點擊查看已報到兒童</p>
             </CardContent>
           </Card>
 
           <Card
-            className={`bg-red-600 cursor-pointer transition-all hover:shadow-md ${
+            data-list-mode="unchecked"
+            className={`dashboard-list-trigger bg-red-600 cursor-pointer transition-all hover:shadow-md ${
               showDetails && listMode === 'unchecked'
                 ? 'ring-4 ring-red-300 ring-offset-2 ring-offset-slate-900 shadow-xl scale-[1.05] -translate-y-1'
                 : 'shadow-sm'
             }`}
-            onClick={() => {
-              if (!showDetails) return;
-              handleChangeListMode('unchecked');
-            }}
+            onClick={() => handleStatCardClick('unchecked')}
           >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-base md:text-lg font-medium text-white">尚未簽到</CardTitle>
@@ -409,20 +411,18 @@ export default function KidsDashboardPage() {
               <div className="text-5xl md:text-6xl font-extrabold text-red-100 text-right leading-tight">
                 {unchecked}
               </div>
-              <p className="text-xs text-red-200 mt-1">尚未報到的兒童</p>
+              <p className="text-xs text-red-100 mt-1">點擊查看尚未報到兒童</p>
             </CardContent>
           </Card>
 
           <Card
-            className={`bg-amber-600 cursor-pointer transition-all hover:shadow-md ${
+            data-list-mode="cancelled"
+            className={`dashboard-list-trigger bg-amber-600 cursor-pointer transition-all hover:shadow-md ${
               showDetails && listMode === 'cancelled'
                 ? 'ring-4 ring-amber-300 ring-offset-2 ring-offset-slate-900 shadow-xl scale-[1.05] -translate-y-1'
                 : 'shadow-sm'
             }`}
-            onClick={() => {
-              if (!showDetails) return;
-              handleChangeListMode('cancelled');
-            }}
+            onClick={() => handleStatCardClick('cancelled')}
           >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-base md:text-lg font-medium text-white">不會出席</CardTitle>
@@ -432,7 +432,7 @@ export default function KidsDashboardPage() {
               <div className="text-5xl md:text-6xl font-extrabold text-amber-100 text-right leading-tight">
                 {cancelled}
               </div>
-              <p className="text-xs text-amber-200 mt-1">已標記不會出席的兒童</p>
+              <p className="text-xs text-amber-100 mt-1">點擊查看不會出席兒童</p>
             </CardContent>
           </Card>
 
